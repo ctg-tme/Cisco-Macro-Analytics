@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en" class="theme-dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cisco Macro Analyzer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <nav class="navbar is-fixed-top is-dark" role="navigation" aria-label="main navigation">
+        <div class="navbar-brand">
+            <a class="navbar-item is-unselectable" style="pointer-events: none; border-right: 1px solid #ffffff;">
+                <img src="https://avatars.githubusercontent.com/u/159071680?s=200&v=4" />
+                <h5 class="title is-5 pl-3">Cisco Macro Analyzer</h5>
+            </a>
+
+            <!-- Burger icon for mobile -->
+            <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" data-target="navbarMain">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </a>
+        </div>
+
+        <div id="navbarMain" class="navbar-menu">
+            <div class="navbar-start">
+                <a class="navbar-item">Placeholder</a>
+                <a class="navbar-item">Placeholder</a>
+                <a class="navbar-item">Placeholder</a>
+                <a class="navbar-item">Placeholder</a>
+                <a class="navbar-item">About</a>
+            </div>
+            <div class="navbar-end">
+                <div class="navbar-item">
+                    <button class="button" style="margin: .25em;">Connect Endpoint</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+
+
+    <section id="mainWorkspace" class="section">
+        <div id="fileUploadSection" class="container">
+            <button id="uploadBtn">Upload Macro</button>
+            <input type="file" id="fileInput" />
+            <div id="results"></div>
+        </div>
+    </section>
+
+    <footer id="pid-footer" class="footer py-2 is-fixed-bottom">
+        <div class="content has-text-centered">
+            <p>
+                CTG - Technical Marketing Engineering
+                <span class="icon is-medium">
+                    <i class="fa-brands fa-github"></i>
+                </span>
+                <a href="https://github.com/ctg-tme" target="_blank">View on Github</a>
+                © <span id="currentYear">2025</span> Webex by Cisco <br />
+            </p>
+        </div>
+    </footer>
+
+    <script src="scripts/styleAdjustements.js"></script>
+    <script src="scripts/fileUpload.js"></script>
+
+</body>
+
+</html>

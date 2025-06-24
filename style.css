@@ -1,0 +1,30 @@
+@import url(https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css);
+@import url(https://cdn.jsdelivr.net/npm/bulma@1.0.0/css/bulma.min.css);
+@import url(https://db.onlinewebfonts.com/c/044c1e0595c25636a5589b568081376a?family=CiscoSans+Light+Regular);
+
+body {
+    background-color: black;
+    font-family: "CiscoSans Light Regular";
+    padding-top: 4.5rem;
+    /* Adjust based on navbar height */
+
+}
+
+/* @media (max-width: 1023px) { */
+  /* body.menu-active { */
+    /* margin-top: 12rem; Adjust based on your menu height */
+  /* } */
+/* } */
+
+.footer.is-fixed-bottom {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    z-index: 999;
+    box-shadow: 0 -1px 5px rgba(0, 0, 0, 0.1);
+}
+
+:root {
+    --footer-height: 1.5rem;
+}
