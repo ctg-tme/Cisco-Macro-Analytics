@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
   const fileInput = document.getElementById('fileInput');
+  const fileName = document.getElementById('fileName');
   const resultsDiv = document.getElementById('results');
   const resultsContainer = document.getElementById('results-container');
 
@@ -15,8 +16,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (oldBtn) oldBtn.remove();
 
     const file = fileInput.files[0];
+    fileName.textContent = file ? file.name : "Macro Name Not Found";
     if (!file) {
-      resultsDiv.textContent = "Please select a file first.";
+      alert("Failed to load file")
+      return;
+    }
+    // Check file extension
+    if (!file.name.endsWith('.js')) {
+      alert("Please select a JavaScript (.js) file that contains Macro Code")
       return;
     }
     const reader = new FileReader();
@@ -24,7 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const content = event.target.result;
       const analyzeContent = analyzeMacro(content);
       const stringifiedAnalyzedContent = JSON.stringify(analyzeContent, null, 2)
-      resultsDiv.innerHTML = `<pre><code>${stringifiedAnalyzedContent}</code></pre>`;
+      resultsDiv.innerHTML = '<pre><code class="language-json">' + stringifiedAnalyzedContent + '</code></pre>';
 
       // Create the copy button
       const copyBtn = document.createElement('button');
