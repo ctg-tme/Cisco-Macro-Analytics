@@ -6,13 +6,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cisco Macro Analyzer</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="modalStyles.css">
 </head>
 
 <body>
+    <div id="dev-banner" class="notification is-warning has-text-centered is-small-banner fixed-banner">
+        <button class="" onclick="this.parentElement.style.display='none'"></button>
+        <i class="fa-solid fa-gears"></i> <strong>This site is under development.</strong> <i
+            class="fa-solid fa-gears"></i><br>Features, content and format of this site may change over.
+    </div>
 
     <nav class="navbar is-fixed-top is-dark" role="navigation" aria-label="main navigation">
         <div class="navbar-brand">
-            <a class="navbar-item is-unselectable" style="pointer-events: none; border-right: 1px solid #ffffff;">
+            <a class="navbar-item is-unselectable" style="pointer-events: none; border-right: 1px solid #707070;">
                 <img src="https://avatars.githubusercontent.com/u/159071680?s=200&v=4" />
                 <h5 class="title is-5 pl-3">Cisco Macro Analyzer</h5>
             </a>
@@ -27,27 +33,50 @@
 
         <div id="navbarMain" class="navbar-menu">
             <div class="navbar-start">
+                <!-- <a class="navbar-item">Placeholder</a>
                 <a class="navbar-item">Placeholder</a>
                 <a class="navbar-item">Placeholder</a>
-                <a class="navbar-item">Placeholder</a>
-                <a class="navbar-item">Placeholder</a>
-                <a class="navbar-item">About</a>
+                <a class="navbar-item">Placeholder</a> -->
+                <a class="navbar-item js-modal-trigger" data-target="about-modal">About</a>
             </div>
             <div class="navbar-end">
                 <div class="navbar-item">
-                    <button class="button" style="margin: .25em;">Connect Endpoint</button>
+                    <button class="button js-modal-trigger" data-target="connect-endpoint-modal">
+                        <span class="icon">
+                            <i class="fa-solid fa-network-wired"></i>
+                        </span>
+                        <span>Connect Endpoint</span>
+                    </button>
                 </div>
             </div>
         </div>
     </nav>
 
 
-
     <section id="mainWorkspace" class="section">
         <div id="fileUploadSection" class="container">
-            <button id="uploadBtn">Upload Macro</button>
-            <input type="file" id="fileInput" />
-            <div id="results"></div>
+            <div class="file has-name is-fullwidth">
+                <label class="file-label">
+                    <input class="file-input" type="file" id="fileInput">
+                    <span class="file-cta">
+                        <span class="file-icon">
+                            <i class="fas fa-upload"></i>
+                        </span>
+                        <!-- Change this text to your custom label -->
+                        <span class="file-label">
+                            Upload your Macro JS file
+                        </span>
+                    </span>
+                    <!-- Change this text for the default "no file" message -->
+                    <span class="file-name" id="fileName">
+                        No macro selected
+                    </span>
+                </label>
+            </div>
+            <!-- <div id="results">Upload a Macro File or Connect Your Cisco Endpoint</div> -->
+            <div id="results-container">
+                <div id="results"></div>
+            </div>
         </div>
     </section>
 
@@ -64,7 +93,123 @@
         </div>
     </footer>
 
+    <!-- Modals Start-->
+
+    <!-- Connect Endpoint Modal -->
+
+    <div id="connect-endpoint-modal" class="modal">
+        <div class="modal-background"></div>
+        <div class="modal-card">
+            <header class="modal-card-head modal-is-primary">
+                <p class="modal-card-title">Connect to Cisco Video Endpoint</p>
+                <button class="delete" aria-label="close"></button>
+            </header>
+            <section class="modal-card-body">
+                <div class="content">
+                    <div class="notification is-danger has-text-centered">
+                        <button class=""></button>
+                        Endpoint Connection is under construction and unusable until work is complete.
+                        <br>
+                        Please Disregard this section, and use the File Upload tool.
+                    </div>
+                    <p>Connect to your Cisco Video Endpoint over a WebSocket and execute the various functions of this
+                        site accross all macros installed onm your endpoint.
+                        <br>
+                        <br>
+                        Provide your devices IP Address/DNS Host Name, the local admin username and password to connect.
+                        <br>
+                        <br>
+                    <p><strong>If using a Self Signed Cert, please login to the WebUI of you device using the same
+                            browser before attempting to connect.</strong></p>
+                    </p>
+                    <div class="field">
+                        <p class="control has-icons-left has-icons-right">
+                            <input class="input" type="text" placeholder="IP Address" />
+                            <span class="icon is-small is-left">
+                                <i class="fa-solid fa-globe"></i>
+                            </span>
+                        </p>
+                    </div>
+                    <div class="field">
+                        <p class="control has-icons-left">
+                            <input class="input" type="Text" placeholder="Username" />
+                            <span class="icon is-small is-left">
+                                <i class="fa-solid fa-user"></i>
+                            </span>
+                        </p>
+                    </div>
+                    <div class="field">
+                        <p class="control has-icons-left">
+                            <input class="input" type="password" placeholder="Password" />
+                            <span class="icon is-small is-left">
+                                <i class="fas fa-lock"></i>
+                            </span>
+                        </p>
+                    </div>
+                    <p><strong>Note: </strong>No changes will be made to macros running on your device.</p>
+                </div>
+            </section>
+            <footer class="modal-card-foot">
+                <div class=" buttons">
+                    <button class="button">Cancel</button>
+                    <button class="button is-success" disabled>Connect</button>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <!-- About Modal -->
+
+    <div id="about-modal" class="modal">
+        <div class="modal-background"></div>
+        <div class="modal-card">
+            <header class="modal-card-head modal-is-info">
+                <p class="modal-card-title">About Cisco Macro Analyzer</p>
+                <button class="delete" aria-label="close"></button>
+            </header>
+            <section class="modal-card-body">
+                <div class="content">
+                    <p>The Cisco Macro Analyzer parses Macro Code to aid in documentation of your solution and/or
+                        troubleshoot existing solutions.
+                        <br>
+                        <br>
+                        Once parsed, it will provide the following details of your Macro Code
+                    </p>
+
+                    <ul>
+                        <li>Warnings
+                            <ul>
+                                <li>Duplicate Subscriber Warnings</li>
+                                <li>Duplicate xAPI Call Warnings</li>
+                                <li>Use of Old xAPI Syntax</li>
+                                <li>Use of Mixed xAPI Syntax</li>
+                            </ul>
+                        </li>
+                        <li>xAPI References
+                            <ul>
+                                <li>The Full Branch and Path</li>
+                                <li>A Hyperlink to its documentation on the RoomOS Site</li>
+                                <li>How it was used (Set, Get or Subscribed too)</li>
+                                <li>Its recurrence in your script</li>
+                            </ul>
+                        </li>
+                    </ul>
+                </div>
+            </section>
+            <footer class="modal-card-foot modal-is-info">
+                <div class="content">
+                    <ul>
+                        <li>Version: 0.1.0 Beta</li>
+                    </ul>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+
+    <script src="scripts/bulmaModals.js"></script>
     <script src="scripts/styleAdjustements.js"></script>
+    <script src="scripts/analyzeMacro.js"></script>
     <script src="scripts/fileUpload.js"></script>
 
 </body>

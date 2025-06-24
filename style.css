@@ -5,15 +5,15 @@
 body {
     background-color: black;
     font-family: "CiscoSans Light Regular";
-    padding-top: 4.5rem;
+    padding-top: 3.5rem;
     /* Adjust based on navbar height */
 
 }
 
 /* @media (max-width: 1023px) { */
-  /* body.menu-active { */
-    /* margin-top: 12rem; Adjust based on your menu height */
-  /* } */
+/* body.menu-active { */
+/* margin-top: 12rem; Adjust based on your menu height */
+/* } */
 /* } */
 
 .footer.is-fixed-bottom {
@@ -27,4 +27,37 @@ body {
 
 :root {
     --footer-height: 1.5rem;
+}
+
+.is-small-banner {
+    padding: 0.10rem 0.75rem;
+    font-size: 0.85rem;
+}
+
+.is-small-banner .delete {
+    margin-top: -.85rem;
+}
+
+.fixed-banner {
+  position: fixed;
+  top: 3.25rem; /* Default Bulma navbar height; adjust if your navbar is taller */
+  left: 0;
+  width: 100%;
+  z-index: 1041; /* Higher than navbar (Bulma's navbar z-index is 1030) */
+  border-radius: 0;
+}
+
+#results pre {
+  white-space: pre-wrap;     /* Allows wrapping */
+  word-break: break-word;    /* Breaks long words if needed */
+}
+
+#results-container {
+  position: relative;
+}
+#copyBtn {
+  /* Already set in JS, but you can override here if preferred */
+  border: none;
+  background: none;
+  cursor: pointer;
 }

@@ -1,29 +1,64 @@
-// Reference the elements
-const fileInput = document.getElementById('fileInput');
-const uploadBtn = document.getElementById('uploadBtn');
-const resultsDiv = document.getElementById('results');
+document.addEventListener('DOMContentLoaded', () => {
+  const fileInput = document.getElementById('fileInput');
+  const resultsDiv = document.getElementById('results');
+  const resultsContainer = document.getElementById('results-container');
 
-// Example: Your parsing function
-function parseFileContent(content) {
-  // Replace this with your actual logic
-  return `File content length: ${content.length}`;
-}
-
-// Handle file upload
-uploadBtn.addEventListener('click', () => {
-  const file = fileInput.files[0];
-  if (!file) {
-    resultsDiv.textContent = "Please select a file first.";
-    return;
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 
-  const reader = new FileReader();
-  reader.onload = function(event) {
-    const content = event.target.result;
-    // Call your parsing function here
-    const parsedResult = parseFileContent(content);
-    // Render results
-    resultsDiv.textContent = parsedResult;
-  };
-  reader.readAsText(file); // Use readAsDataURL or readAsArrayBuffer for other file types
+  fileInput.addEventListener('change', () => {
+    // Remove existing copy button if present
+    const oldBtn = document.getElementById('copyBtn');
+    if (oldBtn) oldBtn.remove();
+
+    const file = fileInput.files[0];
+    if (!file) {
+      resultsDiv.textContent = "Please select a file first.";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = function (event) {
+      const content = event.target.result;
+      const analyzeContent = analyzeMacro(content);
+      const stringifiedAnalyzedContent = JSON.stringify(analyzeContent, null, 2)
+      resultsDiv.innerHTML = `<pre><code>${stringifiedAnalyzedContent}</code></pre>`;
+
+      // Create the copy button
+      const copyBtn = document.createElement('button');
+      copyBtn.id = 'copyBtn';
+      copyBtn.className = 'button is-light';
+      copyBtn.title = 'Copy to clipboard';
+      copyBtn.style.position = 'absolute';
+      copyBtn.style.top = '0.5rem';
+      copyBtn.style.right = '0.5rem';
+      copyBtn.style.zIndex = 10;
+      copyBtn.innerHTML = '<span class="icon"><i class="fa-regular fa-copy"></i></span>';
+
+      // Copy logic
+      copyBtn.onclick = function () {
+        navigator.clipboard.writeText(stringifiedAnalyzedContent)
+          .then(() => {
+            copyBtn.innerHTML = '<span class="icon has-text-success"><i class="fa-solid fa-check"></i></span>';
+            setTimeout(() => {
+              copyBtn.innerHTML = '<span class="icon"><i class="fa-regular fa-copy"></i></span>';
+            }, 1200);
+          })
+          .catch(() => alert("Copy failed!"));
+      };
+
+      copyBtn.addEventListener('mouseenter', () => {
+        copyBtn.classList.remove('is-light');
+      });
+      copyBtn.addEventListener('mouseleave', () => {
+        copyBtn.classList.add('is-light');
+      });
+
+      // Add the button to the container
+      resultsContainer.appendChild(copyBtn);
+    };
+    reader.readAsText(file);
+  });
 });

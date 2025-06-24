@@ -1,0 +1,95 @@
+/* PRIMARY */
+.modal-card-head.modal-is-primary,
+.modal-card-head.modal-is-primary .modal-card-title,
+.modal-card-foot.modal-is-primary,
+.modal-card-foot.modal-is-primary .modal-card-title {
+  background-color: #00d1b2 !important;
+  color: #fff !important;
+}
+.modal-card-head.modal-is-primary-light,
+.modal-card-head.modal-is-primary-light .modal-card-title,
+.modal-card-foot.modal-is-primary-light,
+.modal-card-foot.modal-is-primary-light .modal-card-title {
+  background-color: #ebfffc !important;
+  color: #222 !important;
+}
+
+/* LINK */
+.modal-card-head.modal-is-link,
+.modal-card-head.modal-is-link .modal-card-title,
+.modal-card-foot.modal-is-link,
+.modal-card-foot.modal-is-link .modal-card-title {
+  background-color: #485fc7 !important;
+  color: #fff !important;
+}
+.modal-card-head.modal-is-link-light,
+.modal-card-head.modal-is-link-light .modal-card-title,
+.modal-card-foot.modal-is-link-light,
+.modal-card-foot.modal-is-link-light .modal-card-title {
+  background-color: #f5f7ff !important;
+  color: #222 !important;
+}
+
+/* INFO */
+.modal-card-head.modal-is-info,
+.modal-card-head.modal-is-info .modal-card-title,
+.modal-card-foot.modal-is-info,
+.modal-card-foot.modal-is-info .modal-card-title {
+  background-color: #3e8ed0 !important;
+  color: #fff !important;
+}
+.modal-card-head.modal-is-info-light,
+.modal-card-head.modal-is-info-light .modal-card-title,
+.modal-card-foot.modal-is-info-light,
+.modal-card-foot.modal-is-info-light .modal-card-title {
+  background-color: #eff5fb !important;
+  color: #222 !important;
+}
+
+/* SUCCESS */
+.modal-card-head.modal-is-success,
+.modal-card-head.modal-is-success .modal-card-title,
+.modal-card-foot.modal-is-success,
+.modal-card-foot.modal-is-success .modal-card-title {
+  background-color: #48c774 !important;
+  color: #fff !important;
+}
+.modal-card-head.modal-is-success-light,
+.modal-card-head.modal-is-success-light .modal-card-title,
+.modal-card-foot.modal-is-success-light,
+.modal-card-foot.modal-is-success-light .modal-card-title {
+  background-color: #f0fff4 !important;
+  color: #222 !important;
+}
+
+/* WARNING */
+.modal-card-head.modal-is-warning,
+.modal-card-head.modal-is-warning .modal-card-title,
+.modal-card-foot.modal-is-warning,
+.modal-card-foot.modal-is-warning .modal-card-title {
+  background-color: #ffb60d !important;
+  color: #222 !important;
+}
+.modal-card-head.modal-is-warning-light,
+.modal-card-head.modal-is-warning-light .modal-card-title,
+.modal-card-foot.modal-is-warning-light,
+.modal-card-foot.modal-is-warning-light .modal-card-title {
+  background-color: #ffe08a !important;
+  color: #222 !important;
+}
+
+/* DANGER */
+.modal-card-head.modal-is-danger,
+.modal-card-head.modal-is-danger .modal-card-title,
+.modal-card-foot.modal-is-danger,
+.modal-card-foot.modal-is-danger .modal-card-title {
+  background-color: #f14668 !important;
+  color: #fff !important;
+}
+.modal-card-head.modal-is-danger-light,
+.modal-card-head.modal-is-danger-light .modal-card-title,
+.modal-card-foot.modal-is-danger-light,
+.modal-card-foot.modal-is-danger-light .modal-card-title {
+  background-color: #fff5f7 !important;
+  color: #222 !important;
+}
