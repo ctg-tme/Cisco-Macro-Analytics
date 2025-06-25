@@ -1,6 +1,49 @@
 String.prototype.capitalizeFirstLetter = function () {
-  return this.toLowerCase().charAt(0).toUpperCase() + this.slice(1);   
+  return this.toLowerCase().charAt(0).toUpperCase() + this.slice(1);
 };
+
+const commonJsWarning = 'CommonJS modules (require, exports and module.exports) are deprecated. Use ES modules instead (import, export). See https://roomos.cisco.com/doc/TechDocs/MacroTutorial#modules for more info.';
+
+const depricatedSyntax = [
+  {
+    searchException: '.*require\\(',
+    suggestedReplacement: 'import'
+  },
+  {
+    searchException: '.*require\\.main',
+    suggestedReplacement: '_main_macro_name()'
+  },
+  {
+    searchException: '.*module\\.name',
+    suggestedReplacement: '_main_macro_name()'
+  },
+  {
+    searchException: '.*module\\.exports',
+    suggestedReplacement: 'export'
+  },
+  {
+    searchException: '.*exports\\s*=',
+    suggestedReplacement: 'export'
+  },
+  {
+    searchException: '.*module\\.',
+    suggestedReplacement: 'Unable to Suggest, not enough information'
+  }
+]
+
+function searchForDepricatedSyntax(content) {
+  let errorsFound = false;
+  let errorType = []
+  depricatedSyntax.forEach(term => {
+    const reg = new RegExp(term.searchException, 'gm');
+
+    if (reg.test(content)) {
+      errorsFound = true
+      errorType.push(term)
+    }
+  })
+  return { hasErrors: errorsFound, errorType }
+}
 
 /**
  * Analyzes a Macro JS file as a string and parse xAPI Types and Paths
@@ -12,7 +55,6 @@ String.prototype.capitalizeFirstLetter = function () {
  * @param macroContent the Macro'stext file
  * @param regex the RegEx to check the macro against
  */
-
 window.analyzeMacro = function (macroContent) {
   const NewMacroSyntaxRegex = `xapi\\s*\\.(?<Type>Command|Status|Event|Config)\\s*\\.(?<Path>[A-Za-z0-9_\\s*\\.\\[\\]]+?)(?<Action>\\s*\\.(set|get|on|once))?\\(`;
   const OldMacroSyntaxRegex = `xapi\\.(?<Type>config|status|event|command)(?<Action>\\.(set|get|on|once))?\\('(?<Path>[A-Za-z0-9 ]+?[^']*)`;
@@ -198,6 +240,13 @@ window.analyzeMacro = function (macroContent) {
   };
 
   const warnings = [];
+  const errors = [];
+
+  const syntaxtWarnings = searchForDepricatedSyntax(macroContent)
+
+  if (syntaxtWarnings.hasErrors) {
+    errors.push({Message: commonJsWarning, FoundSyntaxErrors: syntaxtWarnings.errorType})
+  }
 
   // Step 7: Evaluate data for possible warnings to relay to Developers
   const duplicateSubscribers = [];
@@ -271,6 +320,10 @@ window.analyzeMacro = function (macroContent) {
   })
 
   let finalReport = {}
+
+  if (errors.length > 0) {
+    finalReport.Errors = errors;
+  }
 
   if (warnings.length > 0) {
     finalReport.Warnings = warnings;

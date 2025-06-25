@@ -5,15 +5,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cisco Macro Analyzer</title>
+    <link rel="icon" type="image/x-icon" href="https://avatars.githubusercontent.com/u/159071680?s=200&v=4">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="modalStyles.css">
 </head>
 
 <body>
     <div id="dev-banner" class="notification is-warning has-text-centered is-small-banner fixed-banner">
-        <button class="" onclick="this.parentElement.style.display='none'"></button>
-        <i class="fa-solid fa-gears"></i> <strong>This site is under development.</strong> <i
-            class="fa-solid fa-gears"></i><br>Features, content and format of this site may change over.
+        <button class="delete" onclick="this.parentElement.style.display='none'"></button>
+        <i class="fa-solid fa-gears"></i> <strong>v<span class="appVersion">0.1.1</span></strong> <i
+            class="fa-solid fa-gears"></i>
     </div>
 
     <nav class="navbar is-fixed-top is-dark" role="navigation" aria-label="main navigation">
@@ -33,11 +34,9 @@
 
         <div id="navbarMain" class="navbar-menu">
             <div class="navbar-start">
-                <!-- <a class="navbar-item">Placeholder</a>
-                <a class="navbar-item">Placeholder</a>
-                <a class="navbar-item">Placeholder</a>
-                <a class="navbar-item">Placeholder</a> -->
+                <a class="navbar-item js-modal-trigger" data-target="news-modal">What's New</a>
                 <a class="navbar-item js-modal-trigger" data-target="about-modal">About</a>
+                <a class="navbar-item js-modal-trigger" data-target="appInfo-modal">App Info</a>
             </div>
             <div class="navbar-end">
                 <div class="navbar-item">
@@ -48,12 +47,36 @@
                         <span>Connect Endpoint</span>
                     </button>
                 </div>
+                <div class="navbar-item">
+                    <a href="https://github.com/ctg-tme/Cisco-Macro-Analytics/issues" target="_blank" class="button">
+                        <span class="icon">
+                            <i class="fa-solid fa-bug"></i>
+                        </span>
+                        <span>Bugs/Suggestions</span>
+                        <span class="icon">
+                            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                        </span>
+                    </a>
+                </div>
             </div>
+        </div>
         </div>
     </nav>
 
-
     <section id="mainWorkspace" class="section">
+        <div class="buttons" id="toolButtons">
+            <button class="button is-small is-primary" data-tool="analyze">
+                <span class="icon is-small"><i class="fa-solid fa-magnifying-glass-chart"></i></span>
+                <span>Analyze</span>
+            </button>
+            <span class="has-tooltip-arrow has-tooltip-bottom" data-tooltip="In Development">
+                <button class="button is-small" data-tool="replaceCommonJS" disabled>
+                    <span class="icon is-small"><i class="fa-solid fa-bandage"></i></span>
+                    <span>Auto Replace Common JS syntax</span>
+                </button>
+            </span>
+        </div>
+        <hr>
         <div id="fileUploadSection" class="container">
             <div class="file has-name is-fullwidth">
                 <label class="file-label">
@@ -87,7 +110,7 @@
                 <span class="icon is-medium">
                     <i class="fa-brands fa-github"></i>
                 </span>
-                <a href="https://github.com/ctg-tme" target="_blank">View on Github</a>
+                <a href="https://github.com/ctg-tme" target="_blank">View the CTG Repository on Github</a>
                 © <span id="currentYear">2025</span> Webex by Cisco <br />
             </p>
         </div>
@@ -122,37 +145,42 @@
                     <p><strong>If using a Self Signed Cert, please login to the WebUI of you device using the same
                             browser before attempting to connect.</strong></p>
                     </p>
-                    <div class="field">
-                        <p class="control has-icons-left has-icons-right">
-                            <input class="input" type="text" placeholder="IP Address" />
-                            <span class="icon is-small is-left">
-                                <i class="fa-solid fa-globe"></i>
-                            </span>
-                        </p>
-                    </div>
-                    <div class="field">
-                        <p class="control has-icons-left">
-                            <input class="input" type="Text" placeholder="Username" />
-                            <span class="icon is-small is-left">
-                                <i class="fa-solid fa-user"></i>
-                            </span>
-                        </p>
-                    </div>
-                    <div class="field">
-                        <p class="control has-icons-left">
-                            <input class="input" type="password" placeholder="Password" />
-                            <span class="icon is-small is-left">
-                                <i class="fas fa-lock"></i>
-                            </span>
-                        </p>
-                    </div>
+                    <form>
+                        <div class="field">
+                            <p class="control has-icons-left has-icons-right">
+                                <input class="input" type="text" placeholder="IP Address" />
+                                <span class="icon is-small is-left">
+                                    <i class="fa-solid fa-globe"></i>
+                                </span>
+                            </p>
+                        </div>
+                        <div class="field">
+                            <p class="control has-icons-left">
+                                <input class="input" type="text" placeholder="Username" />
+                                <span class="icon is-small is-left">
+                                    <i class="fa-solid fa-user"></i>
+                                </span>
+                            </p>
+                        </div>
+                        <div class="field">
+                            <p class="control has-icons-left">
+                                <input class="input" type="password" autocomplete="current-password"
+                                    placeholder="Password" />
+                                <span class="icon is-small is-left">
+                                    <i class="fas fa-lock"></i>
+                                </span>
+                            </p>
+                        </div>
+                    </form>
                     <p><strong>Note: </strong>No changes will be made to macros running on your device.</p>
                 </div>
             </section>
             <footer class="modal-card-foot">
                 <div class=" buttons">
                     <button class="button">Cancel</button>
-                    <button class="button is-success" disabled>Connect</button>
+                    <span class="has-tooltip-arrow has-tooltip-top" data-tooltip="In Development">
+                        <button class="button is-success" disabled>Connect</button>
+                    </span>
                 </div>
             </footer>
         </div>
@@ -177,6 +205,18 @@
                     </p>
 
                     <ul>
+                        <li>Errors
+                            <ul>
+                                <li>Shows Common JS Syntax Errors
+                                    <ul>
+                                        <li>Performs same check as RoomOS Today</li>
+                                        <li>Adds additional check for generic use of the module object</li>
+                                        <li>Add additional check for use of module.name</li>
+                                        <li>Provides Search Regex and possible replacement suggestions</li>
+                                    </ul>
+                                </li>
+                            </ul>
+                        </li>
                         <li>Warnings
                             <ul>
                                 <li>Duplicate Subscriber Warnings</li>
@@ -199,13 +239,67 @@
             <footer class="modal-card-foot modal-is-info">
                 <div class="content">
                     <ul>
-                        <li>Version: 0.1.1 Beta</li>
+                        <li>App Version: <span class="appVersion">0.1.1</span></li>
                     </ul>
                 </div>
             </footer>
         </div>
     </div>
 
+    <!-- App Info Modal -->
+
+    <div id="appInfo-modal" class="modal">
+        <div class="modal-background"></div>
+        <div class="modal-card">
+            <header class="modal-card-head modal-is-info">
+                <p class="modal-card-title">App Information</p>
+                <button class="delete" aria-label="close"></button>
+            </header>
+            <section class="modal-card-body">
+                <div class="content">
+                    <ul>
+                        <li>App Version: <span class="appVersion">0.1.1</span></li>
+                        <li>App Dependencies: </li>
+                    </ul>
+                    <span class="appDependency"></span>
+                </div>
+            </section>
+            <footer class="modal-card-foot modal-is-info">
+                <div class="content">
+                    <span class="icon is-medium">
+                        <i class="fa-brands fa-github"></i>
+                    </span>
+                    <a href="https://github.com/ctg-tme/Cisco-Macro-Analytics" target="_blank">View Source on Github</a>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <!-- News Modal -->
+
+    <div id="news-modal" class="modal">
+        <div class="modal-background"></div>
+        <div class="modal-card">
+            <header class="modal-card-head modal-is-primary">
+                <p class="modal-card-title">What's new in Version <span class="appVersion">0.1.1</span></p>
+                <button class="delete" aria-label="close"></button>
+            </header>
+            <section class="modal-card-body">
+                <div class="content">
+                    <span class="appNews"></span>
+                </div>
+            </section>
+            <footer class="modal-card-foot modal-is-primary">
+                <div class="content">
+                    <span class="icon is-medium">
+                        <i class="fa-brands fa-github"></i>
+                    </span>
+                    <a href="https://github.com/ctg-tme/Cisco-Macro-Analytics/releases" target="_blank">Check the
+                        Release Notes for More Details</a>
+                </div>
+            </footer>
+        </div>
+    </div>
 
     <script src="scripts/bulmaModals.js"></script>
     <script src="scripts/styleAdjustements.js"></script>
