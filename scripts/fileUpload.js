@@ -133,7 +133,8 @@ document.addEventListener('DOMContentLoaded', () => {
   async function processAnalyze(content) {
     const analyzeContent = await analyzeMacro(content); // You must define this elsewhere
     const stringifiedAnalyzedContent = JSON.stringify(analyzeContent, null, 2);
-    resultsDiv.innerHTML = '<pre><code class="language-json">' + escapeHtml(stringifiedAnalyzedContent) + '</code></pre>';
+    // resultsDiv.innerHTML = '<pre><code class="language-json">' + escapeHtml(stringifiedAnalyzedContent) + '</code></pre>';
+    loadResults(stringifiedAnalyzedContent, 'results')
     addCopyButton(stringifiedAnalyzedContent);
   }
 
@@ -152,7 +153,7 @@ document.addEventListener('DOMContentLoaded', () => {
     copyBtn.className = 'button is-light';
     copyBtn.title = 'Copy to clipboard';
     copyBtn.style.position = 'absolute';
-    copyBtn.style.top = '3rem';
+    copyBtn.style.top = '1rem';
     copyBtn.style.right = '3rem';
     copyBtn.style.zIndex = 10;
     copyBtn.innerHTML = '<span class="icon"><i class="fa-regular fa-copy"></i></span>';

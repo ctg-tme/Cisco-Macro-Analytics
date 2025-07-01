@@ -1,7 +1,11 @@
 {
-  "Version": "0.1.4-BETA",
+  "Version": "0.1.5-BETA",
   "News": {
     "Messages": [
+      {
+        "Text": "Monaco Integration! Results now render in the Moncaco Editor IDE. Allows for syntax highlighting and lays the groundwork for future additions.",
+        "ImagePath": "images/News_Monaco_Editor.png"
+      },
       {
         "Text": "Added Drag and Drop Fill Support!",
         "ImagePath": "images/News_Drag_&_Drop_Support.gif"
