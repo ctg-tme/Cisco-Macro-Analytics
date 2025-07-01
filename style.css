@@ -4,9 +4,15 @@
 @import url(https://db.onlinewebfonts.com/c/044c1e0595c25636a5589b568081376a?family=CiscoSans+Light+Regular);
 
 body {
-    background-color: black;
-    font-family: "CiscoSans Light Regular";
-    padding-top: 3.5rem; /* Adjust based on navbar height */
+    padding-top: 3.5rem;
+    /* Adjust based on navbar height */
+}
+
+html,
+body {
+    --bulma-scheme-main: #000 !important;
+    background: #000 !important;
+    font-family: "CiscoSans Light Regular" !important;
 }
 
 .footer.is-fixed-bottom {
@@ -32,34 +38,53 @@ body {
 }
 
 .fixed-banner {
-  position: fixed;
-  top: 3.25rem; /* Default Bulma navbar height; adjust if your navbar is taller */
-  left: 0;
-  width: 100%;
-  z-index: 39; /* Higher than navbar (Bulma's navbar z-index is 1030) */
-  border-radius: 0;
+    position: fixed;
+    top: 3.25rem;
+    /* Default Bulma navbar height; adjust if your navbar is taller */
+    left: 0;
+    width: 100%;
+    z-index: 39;
+    /* Higher than navbar (Bulma's navbar z-index is 1030) */
+    border-radius: 0;
 }
 
 #results pre {
-  white-space: pre-wrap;     /* Allows wrapping */
-  word-break: break-word;    /* Breaks long words if needed */
+    white-space: pre-wrap;
+    /* Allows wrapping */
+    word-break: break-word;
+    /* Breaks long words if needed */
 }
 
 #results-container {
-  position: relative;
+    position: relative;
 }
+
 #copyBtn {
-  /* Already set in JS, but you can override here if preferred */
-  border: none;
-  background: none;
-  cursor: pointer;
+    /* Already set in JS, but you can override here if preferred */
+    border: none;
+    background: none;
+    cursor: pointer;
 }
 
 .app-news img {
-  border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .enlargeable-image {
-  cursor: zoom-in;
+    cursor: zoom-in;
+}
+
+#fileDropZone {
+    border: 3px dashed #00d1b2;
+    border-radius: 10px;
+    padding: 2em;
+    width: 100vw;
+    text-align: center;
+    cursor: copy;
+}
+
+.section-tight {
+    margin-top: -1em;
+    margin-bottom: -4em;
 }

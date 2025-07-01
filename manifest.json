@@ -1,18 +1,10 @@
 {
-  "Version": "0.1.3-BETA",
+  "Version": "0.1.4-BETA",
   "News": {
     "Messages": [
       {
-        "Text": "Common JS Depricated Syntax Analysis added. Like RoomOS, this tool now parses your macro and indicates if you have incompatible Common JS Syntax. If running RoomOS 10 or Older, please disregard",
-        "ImagePath": "images/News_Deprecated_Syntax.png"
-      },
-      {
-        "Text": "Added What's New Section, App info Section, and Bug/Suggestions Hyperlink",
-        "ImagePath": null
-      },
-      {
-        "Text": "Layed the groundwork for more tools to come 🤓",
-        "ImagePath": null
+        "Text": "Added Drag and Drop Fill Support!",
+        "ImagePath": "images/News_Drag_&_Drop_Support.gif"
       }
     ]
   },

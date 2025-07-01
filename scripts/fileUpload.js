@@ -10,6 +10,49 @@ document.addEventListener('DOMContentLoaded', () => {
   const resultsDiv = document.getElementById('results');
   const resultsContainer = document.getElementById('results-container');
 
+  const fileDropZone = document.getElementById('fileDropZone');
+  const fileDropMessage = document.getElementById('fileDropMessage');
+
+  // Show file dialog on click
+  fileDropZone.addEventListener('click', () => fileInput.click());
+
+  // Highlight drop zone on dragover/dragenter
+  ['dragenter', 'dragover'].forEach(eventName => {
+    fileDropZone.addEventListener(eventName, e => {
+      e.preventDefault();
+      fileDropZone.classList.add('is-dragover');
+    });
+  });
+  ['dragleave', 'drop'].forEach(eventName => {
+    fileDropZone.addEventListener(eventName, e => {
+      e.preventDefault();
+      fileDropZone.classList.remove('is-dragover');
+    });
+  });
+
+  // Handle file drop
+  fileDropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    const droppedFiles = e.dataTransfer.files;
+    if (droppedFiles.length) {
+      fileInput.files = droppedFiles; // Simulate file input
+      fileInput.dispatchEvent(new Event('change')); // Trigger upload logic
+    }
+  });
+
+  // Optional: Style when dragging
+  const style = document.createElement('style');
+  style.textContent = `
+  #fileDropZone.is-dragover,
+  #fileDropZone:hover {
+    background:rgb(0, 209, 178, 0.5);
+    border-color:rgb(0, 255, 217);
+    color: white;
+  }
+`;
+  document.head.appendChild(style);
+
   // Helper to escape HTML (for safe code block rendering)
   function escapeHtml(text) {
     const div = document.createElement('div');
@@ -87,8 +130,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Analyze Macro
-  function processAnalyze(content) {
-    const analyzeContent = analyzeMacro(content); // You must define this elsewhere
+  async function processAnalyze(content) {
+    const analyzeContent = await analyzeMacro(content); // You must define this elsewhere
     const stringifiedAnalyzedContent = JSON.stringify(analyzeContent, null, 2);
     resultsDiv.innerHTML = '<pre><code class="language-json">' + escapeHtml(stringifiedAnalyzedContent) + '</code></pre>';
     addCopyButton(stringifiedAnalyzedContent);
@@ -109,8 +152,8 @@ document.addEventListener('DOMContentLoaded', () => {
     copyBtn.className = 'button is-light';
     copyBtn.title = 'Copy to clipboard';
     copyBtn.style.position = 'absolute';
-    copyBtn.style.top = '0.5rem';
-    copyBtn.style.right = '0.5rem';
+    copyBtn.style.top = '3rem';
+    copyBtn.style.right = '3rem';
     copyBtn.style.zIndex = 10;
     copyBtn.innerHTML = '<span class="icon"><i class="fa-regular fa-copy"></i></span>';
 

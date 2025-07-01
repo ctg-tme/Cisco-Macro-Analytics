@@ -63,7 +63,7 @@
         </div>
     </nav>
 
-    <section id="mainWorkspace" class="section">
+    <section id="mainWorkspace" class="section section-tight">
         <div class="buttons" id="toolButtons">
             <button class="button is-small is-primary" data-tool="analyze">
                 <span class="icon is-small"><i class="fa-solid fa-magnifying-glass-chart"></i></span>
@@ -76,31 +76,38 @@
                 </button>
             </span>
         </div>
-        <hr>
+    </section>
+    <section class="section section-tight">
         <div id="fileUploadSection" class="container">
-            <div class="file has-name is-fullwidth">
+            <!-- <div class="file has-name is-fullwidth">
                 <label class="file-label">
                     <input class="file-input" type="file" id="fileInput">
                     <span class="file-cta">
                         <span class="file-icon">
                             <i class="fas fa-upload"></i>
                         </span>
-                        <!-- Change this text to your custom label -->
+
                         <span class="file-label">
                             Upload your Macro JS file
                         </span>
                     </span>
-                    <!-- Change this text for the default "no file" message -->
                     <span class="file-name" id="fileName">
                         Upload Macro to Start
                     </span>
                 </label>
+            </div> -->
+            <div class="is-flex is-justify-content-center is-align-items-center">
+                <div id="fileDropZone">
+                    <span id="fileDropMessage">Click or Drag & drop Macro .js file here ||</span>
+                    <input type="file" id="fileInput" style="display: none;" accept=".js">
+                    <span id="fileName">Upload Macro to Start</span>
+                </div>
             </div>
             <!-- <div id="results">Upload a Macro File or Connect Your Cisco Endpoint</div> -->
-            <div id="results-container">
-                <div id="results"></div>
-            </div>
         </div>
+    </section>
+    <section id="results-container" class="section section-tight">
+        <div id="results"></div>
     </section>
 
     <footer id="pid-footer" class="footer py-2 is-fixed-bottom">
