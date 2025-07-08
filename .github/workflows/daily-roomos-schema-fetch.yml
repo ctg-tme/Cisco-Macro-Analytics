@@ -1,0 +1,124 @@
+name: Daily RoomOS Schema Fetcher
+
+on:
+  schedule:
+    # This cron expression means "at 00:00 (midnight) UTC, every day".
+    # You can adjust this time if needed. For example, '30 1 * * *' would be 01:30 UTC.
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+    # This allows you to manually trigger the workflow from the 'Actions' tab in your GitHub repository.
+    # This is very useful for testing!
+
+jobs:
+  generate_and_commit_schemas:
+    runs-on: ubuntu-latest # The type of virtual machine to run the job on
+    permissions: # <--- THIS BLOCK GRANTS NECESSARY PERMISSIONS
+      contents: write # <--- THIS GRANTS WRITE PERMISSIONS TO THE GITHUB_TOKEN
+
+    steps:
+      - name: Checkout repository
+        # This action checks out your repository code onto the runner,
+        # so the workflow can access and modify files.
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }} # This token will now have write permissions
+
+      - name: Create xapiSchemas directory
+        # Creates the directory where your JSON files will be stored.
+        run: mkdir -p xapiSchemas
+
+      - name: Fetch and save RoomOS schemas
+        # This is the core script that performs the fetches and file saving.
+        run: |
+          # Step 1: Fetch the initial list of schemas
+          echo "Fetching initial schema list from https://roomos.cisco.com/api/schema..."
+          initial_response=$(curl -s "https://roomos.cisco.com/api/schema")
+          
+          # Basic error handling: Check if the initial fetch returned an empty response
+          if [ -z "$initial_response" ]; then
+            echo "Error: Initial schema list fetch returned an empty response. Exiting."
+            exit 1
+          fi
+
+          # --- NEW ADDITION START ---
+          # Save the initial manifest to a file
+          manifest_filename="xapiSchemas/roomosSchemaManifest.json"
+          echo "$initial_response" > "$manifest_filename"
+          echo "Successfully saved $manifest_filename"
+          # --- NEW ADDITION END ---
+
+          # Step 2: Parse the JSON response and extract names of active schemas.
+          # 'jq' is a powerful command-line JSON processor.
+          # -r: raw output, not JSON strings.
+          # .[]: iterate over each item in the array.
+          # select(.active == 1): filter for items where 'active' property is 1.
+          # .name: extract the 'name' property.
+          schema_names=$(echo "$initial_response" | jq -r '.[] | select(.active == 1) | .name')
+          
+          # Check if any active schemas were found
+          if [ -z "$schema_names" ]; then
+            echo "No active schemas found to process. No new files will be created."
+            exit 0 # Exit successfully as there's nothing to do
+          fi
+
+          echo "Found active schemas:"
+          echo "$schema_names"
+          echo "---"
+
+          # Step 3: Loop through each active schema name, fetch its details, and save to file.
+          # The 'while read -r name' loop handles names that might contain spaces correctly.
+          echo "$schema_names" | while read -r name; do
+            # URL-encode the name using Python for robust handling of spaces and other special characters
+            name_encoded=$(python -c 'import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))' "$name")
+
+            # Construct the detailed URL using the ENCODED name
+            detailed_url="https://roomos.cisco.com/api/schema/$name_encoded"
+            echo "Fetching detailed schema for '$name' (encoded: '$name_encoded') from $detailed_url..."
+            
+            # Fetch the detailed schema
+            detailed_response=$(curl -s "$detailed_url")
+            
+            # Basic error handling for detailed fetch
+            if [ -z "$detailed_response" ]; then
+              echo "Warning: Detailed schema fetch for '$name' returned an empty response. Skipping this schema."
+              continue # Skip to the next schema in the list
+            fi
+
+            # Define the filename and path (filename should use the ORIGINAL name for readability on disk)
+            filename="xapiSchemas/$name.json"
+            
+            # Save the response to the specified JSON file
+            echo "$detailed_response" > "$filename"
+            echo "Successfully saved $filename"
+          done
+
+      - name: Configure Git
+        # Set up the Git user name and email for the commit.
+        # This makes the commit appear as "github-actions[bot]".
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add and Commit new JSON files
+        # This step adds the newly created/modified files and commits them.
+        id: commit_step # Assign an ID to this step to reference its outputs
+        run: |
+          # Stage all JSON files within the xapiSchemas directory
+          git add xapiSchemas/*.json
+          
+          # Check if there are any staged changes to commit
+          if git diff --staged --quiet; then
+            echo "No changes detected. No commit needed."
+            echo "commit_made=false" >> "$GITHUB_OUTPUT" # Set output indicating no commit
+          else
+            # Commit the changes with a descriptive message
+            git commit -m "Automated: Update RoomOS XAPI Schemas and Manifest"
+            echo "Changes committed successfully."
+            echo "commit_made=true" >> "$GITHUB_OUTPUT" # Set output indicating a commit was made
+          fi
+
+      - name: Push changes
+        # This step pushes the commit to your repository.
+        # It only runs if the 'commit_step' actually made a commit.
+        if: steps.commit_step.outputs.commit_made == 'true'
+        run: git push
