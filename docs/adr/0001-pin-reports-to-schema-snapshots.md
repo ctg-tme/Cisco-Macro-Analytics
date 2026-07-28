@@ -1,0 +1,3 @@
+# Pin analysis reports to schema snapshots
+
+RoomOS schema data is volatile, but an analysis finding must remain reproducible and explainable. Each report will identify the immutable Schema Snapshot it used by schema name, upstream update time, and content hash, together with the analyzer version and analysis time; “latest” is only a convenience that resolves to a specific snapshot when analysis begins. Automated ingestion validates response structure and expected content before admitting a snapshot to the Schema Catalog, quarantines suspicious responses, and preserves the last known-good catalog. This adds provenance, validation, and storage responsibilities but prevents upstream changes or failures from silently changing the meaning of an existing report.

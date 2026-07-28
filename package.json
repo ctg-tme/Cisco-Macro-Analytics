@@ -1,0 +1,31 @@
+{
+  "name": "cisco-macro-analytics",
+  "version": "0.3.1-beta",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync:schemas": "node scripts/fetch-roomos-schemas.mjs",
+    "predev": "npm run sync:schemas && node scripts/build-schema-catalog.mjs",
+    "dev": "vite",
+    "prebuild": "npm run sync:schemas && node scripts/build-schema-catalog.mjs",
+    "build": "tsc --noEmit && vite build",
+    "pretest": "node scripts/build-schema-catalog.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@aptabase/web": "^0.5.0",
+    "@momentum-design/fonts": "0.2.6",
+    "@momentum-design/tokens": "0.11.0",
+    "acorn": "8.17.0",
+    "acorn-walk": "8.3.5",
+    "ajv": "8.20.0",
+    "jsxapi": "6.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.0.15",
+    "typescript": "7.0.2",
+    "vite": "8.1.5",
+    "vitest": "4.1.10"
+  }
+}

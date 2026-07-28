@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">Cisco Macro Analyzer favicon</title>
+  <desc id="description">Dark code braces surrounding an analysis target on a cyan rounded square.</desc>
+
+  <rect x="32" y="32" width="448" height="448" rx="132" fill="#65d2ff" />
+
+  <g transform="translate(40 40) scale(.84375)" fill="#07161b" stroke="#07161b">
+    <path
+      d="M184 72C132 72 122 110 122 154v36c0 36-18 54-48 66 30 12 48 30 48 66v36c0 44 10 82 62 82"
+      fill="none"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="56"
+    />
+    <path
+      d="M328 72c52 0 62 38 62 82v36c0 36 18 54 48 66-30 12-48 30-48 66v36c0 44-10 82-62 82"
+      fill="none"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="56"
+    />
+    <circle cx="256" cy="256" r="67" fill="none" stroke-width="56" />
+    <circle cx="256" cy="256" r="18" stroke="none" />
+  </g>
+</svg>

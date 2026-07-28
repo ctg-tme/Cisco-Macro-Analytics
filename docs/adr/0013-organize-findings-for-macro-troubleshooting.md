@@ -1,0 +1,13 @@
+# Organize Findings for macro-first troubleshooting
+
+The results interface will organize Findings under their source macro instead of presenting Review Priority as the primary hierarchy. Findings that inherently span multiple source files appear in a final Cross-macro coordination group. Review Priority remains visible within each macro and still controls the order of Findings, but zero-count priority sections are not rendered. Entries and dependencies move to a dedicated Results tab so relationship context is visible without returning to the upload list.
+
+Finding cards will not render a separate Source locations field. Each distinct source range has one expandable local code preview, and identical ranges are deduplicated before rendering. Binding routes and dependency paths remain available as collapsed supporting evidence. Technical basis, limitations, and documentation links remain available under collapsed Technical details so the first view emphasizes the problem and recommended action.
+
+Authentication-related review remains a vocabulary match rather than a secret detector. Its Finding states that submitted phrases matched the versioned Credential Vocabulary, lists the exact matched phrases, and shows the unmasked local source when the author expands a code preview. This local context is required to find and assess the object being discussed. Analysis Report exports continue to omit source excerpts and adjacent literal values.
+
+Unresolved Identifier remains a neutral Analysis Observation but no longer produces a Finding or attaches to an xAPI Flow Frontier. Its uncertainty is too broad to justify adding troubleshooting work without runtime or environment evidence. Repeated xAPI Reference becomes Advisory because consolidation may reduce maintenance.
+
+Cross-macro overlap is split using connected components of the supplied local dependency graph. The same Canonical xAPI Reference appearing in files connected directly or transitively produces a Linked Macro xAPI Overlap Advisory so authors can consider shared ownership or a wrapper. The same reference appearing across disconnected components produces a Separate Macro xAPI Overlap Informational Finding so independent behaviors can be coordinated without suggesting shared implementation. A reference spanning both situations may produce both Findings because the decisions differ.
+
+This decision supersedes the unresolved-identifier Finding and cross-reference requirements in ADRs 0011 and 0012, the masking behavior previously described in the domain model, and the single informational overlap classification established by the earlier report model. The Observation Ledger, Source References, priority filtering, and exported relationship data remain unchanged.

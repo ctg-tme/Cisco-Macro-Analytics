@@ -1,333 +1,345 @@
-<!DOCTYPE html>
-<html lang="en" class="theme-dark">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!doctype html>
+<html lang="en" class="mds-theme-stable-darkWebex" data-theme="system">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://us.aptabase.com https://eu.aptabase.com wss: ws://127.0.0.1:5176 ws://localhost:5176; object-src 'none'; base-uri 'self'; form-action 'self'"
+    />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="description" content="Analyze Cisco RoomOS macro JavaScript across every validated RoomOS schema and review xAPI version coverage." />
     <title>Cisco Macro Analyzer</title>
-    <link rel="icon" type="image/x-icon" href="https://avatars.githubusercontent.com/u/159071680?s=200&v=4">
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="modalStyles.css">
-</head>
+    <script type="module" src="/src/main.ts"></script>
+  </head>
+  <body class="mds-core mds-typography">
+    <a class="skip-link" href="#analyzer">Skip to analyzer</a>
+    <div class="winter-snowfall" id="winter-snowfall" aria-hidden="true" hidden></div>
 
-<body>
-    <div id="dev-banner" class="notification is-warning has-text-centered is-small-banner fixed-banner">
-        <button class="delete" onclick="this.parentElement.style.display='none'"></button>
-        <i class="fa-solid fa-gears"></i> <strong>v<span class="appVersion">0.1.1</span></strong> <i
-            class="fa-solid fa-gears"></i>
+    <header class="topbar">
+      <a class="brand" href="#analyzer" aria-label="Cisco Macro Analyzer home">
+        <img class="brand-mark" src="/favicon.svg" width="29" height="29" alt="" aria-hidden="true" />
+        <span>Cisco Macro Analyzer</span>
+      </a>
+      <nav class="top-actions" aria-label="Application controls">
+        <label class="theme-picker" for="theme-select">
+          <span>Theme</span>
+          <select id="theme-select" aria-label="Color theme">
+            <option value="system">System</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </label>
+        <button class="button button-quiet" id="about-button" type="button">About</button>
+        <button class="button button-quiet" id="privacy-button" type="button">Privacy</button>
+        <button class="button button-secondary connect-button" id="endpoint-button" type="button">
+          <span id="endpoint-button-label">Connect endpoint</span>
+        </button>
+      </nav>
+    </header>
+    <div class="beta-banner" role="status" aria-label="Beta release">
+      <svg class="beta-gear" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.2 2h-.4a2 2 0 0 0-2 2v.2a2 2 0 0 1-1 1.7l-.4.3a2 2 0 0 1-2 0l-.2-.1a2 2 0 0 0-2.7.7l-.2.4A2 2 0 0 0 4 9.9l.2.1a2 2 0 0 1 1 1.7v.5a2 2 0 0 1-1 1.8l-.2.1a2 2 0 0 0-.7 2.7l.2.4a2 2 0 0 0 2.7.7l.2-.1a2 2 0 0 1 2 0l.4.3a2 2 0 0 1 1 1.7v.2a2 2 0 0 0 2 2h.4a2 2 0 0 0 2-2v-.2a2 2 0 0 1 1-1.7l.4-.3a2 2 0 0 1 2 0l.2.1a2 2 0 0 0 2.7-.7l.2-.4a2 2 0 0 0-.7-2.7l-.2-.1a2 2 0 0 1-1-1.8v-.5a2 2 0 0 1 1-1.7l.2-.1a2 2 0 0 0 .7-2.7l-.2-.4a2 2 0 0 0-2.7-.7l-.2.1a2 2 0 0 1-2 0l-.4-.3a2 2 0 0 1-1-1.7V4a2 2 0 0 0-2-2Z" /><circle cx="12" cy="12" r="3" /></svg>
+      <strong id="app-version">v0.3.1-BETA</strong>
+      <svg class="beta-gear" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.2 2h-.4a2 2 0 0 0-2 2v.2a2 2 0 0 1-1 1.7l-.4.3a2 2 0 0 1-2 0l-.2-.1a2 2 0 0 0-2.7.7l-.2.4A2 2 0 0 0 4 9.9l.2.1a2 2 0 0 1 1 1.7v.5a2 2 0 0 1-1 1.8l-.2.1a2 2 0 0 0-.7 2.7l.2.4a2 2 0 0 0 2.7.7l.2-.1a2 2 0 0 1 2 0l.4.3a2 2 0 0 1 1 1.7v.2a2 2 0 0 0 2 2h.4a2 2 0 0 0 2-2v-.2a2 2 0 0 1 1-1.7l.4-.3a2 2 0 0 1 2 0l.2.1a2 2 0 0 0 2.7-.7l.2-.4a2 2 0 0 0-.7-2.7l-.2-.1a2 2 0 0 1-1-1.8v-.5a2 2 0 0 1 1-1.7l.2-.1a2 2 0 0 0 .7-2.7l-.2-.4a2 2 0 0 0-2.7-.7l-.2.1a2 2 0 0 1-2 0l-.4-.3a2 2 0 0 1-1-1.7V4a2 2 0 0 0-2-2Z" /><circle cx="12" cy="12" r="3" /></svg>
     </div>
 
-    <nav class="navbar is-fixed-top is-dark" role="navigation" aria-label="main navigation">
-        <div class="navbar-brand">
-            <a class="navbar-item is-unselectable" style="pointer-events: none; border-right: 1px solid #707070;">
-                <img src="https://avatars.githubusercontent.com/u/159071680?s=200&v=4" />
-                <h5 class="title is-5 pl-3">Cisco Macro Analyzer</h5>
-            </a>
-
-            <!-- Burger icon for mobile -->
-            <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" data-target="navbarMain">
-                <span aria-hidden="true"></span>
-                <span aria-hidden="true"></span>
-                <span aria-hidden="true"></span>
-            </a>
+    <main>
+      <section class="intro" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow">RoomOS macro development tool</p>
+          <h1 id="page-title">Analyze a RoomOS macro</h1>
+          <p>Upload JavaScript macro files to see the xAPI calls they contain, how those calls are used, and which validated RoomOS versions contain every referenced path.</p>
         </div>
+        <span class="catalog-status" id="catalog-status"><span class="status-dot pending"></span>Loading RoomOS versions…</span>
+      </section>
 
-        <div id="navbarMain" class="navbar-menu">
-            <div class="navbar-start">
-                <a class="navbar-item js-modal-trigger" data-target="news-modal">What's New</a>
-                <a class="navbar-item js-modal-trigger" data-target="about-modal">About</a>
-                <a class="navbar-item js-modal-trigger" data-target="appInfo-modal">App Info</a>
+      <section class="analyzer-panel" id="analyzer" aria-labelledby="analyzer-title">
+        <h2 class="visually-hidden" id="analyzer-title">Macro analyzer inputs</h2>
+        <div class="input-grid">
+          <section class="input-section" aria-labelledby="upload-title">
+            <div class="section-title-row">
+              <div><span class="step-number">1</span><h2 id="upload-title">Upload macro files</h2></div>
+              <span class="count-badge" id="file-count">0 files</span>
             </div>
-            <div class="navbar-end">
-                <div class="navbar-item">
-                    <button class="button js-modal-trigger" data-target="connect-endpoint-modal">
-                        <span class="icon">
-                            <i class="fa-solid fa-network-wired"></i>
-                        </span>
-                        <span>Connect Endpoint</span>
-                    </button>
-                </div>
-                <div class="navbar-item">
-                    <a href="https://github.com/ctg-tme/Cisco-Macro-Analytics/issues" target="_blank" class="button">
-                        <span class="icon">
-                            <i class="fa-solid fa-bug"></i>
-                        </span>
-                        <span>Bugs/Suggestions</span>
-                        <span class="icon">
-                            <i class="fa-solid fa-arrow-up-right-from-square"></i>
-                        </span>
-                    </a>
-                </div>
+            <label class="drop-zone" id="drop-zone" for="file-input">
+              <input id="file-input" type="file" accept=".js,.mjs,text/javascript" multiple />
+              <span class="drop-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" /></svg></span>
+              <strong>Drop .js files here or click to browse</strong>
+              <span>One macro is enough. Add related local modules when the macro imports them.</span>
+            </label>
+            <div class="source-actions" id="manual-source-actions">
+              <button class="button button-secondary" id="demo-button" type="button">Load dependency example</button>
+              <button class="button button-quiet" id="clear-button" type="button" disabled>Clear files</button>
             </div>
-        </div>
-        </div>
-    </nav>
-
-    <section id="mainWorkspace" class="section section-tight">
-        <div class="buttons" id="toolButtons">
-            <button class="button is-small is-primary" data-tool="analyze">
-                <span class="icon is-small"><i class="fa-solid fa-magnifying-glass-chart"></i></span>
-                <span>Analyze</span>
-            </button>
-            <span class="has-tooltip-arrow has-tooltip-bottom" data-tooltip="In Development">
-                <button class="button is-small" data-tool="replaceCommonJS" disabled>
-                    <span class="icon is-small"><i class="fa-solid fa-bandage"></i></span>
-                    <span>Auto Replace Common JS syntax</span>
-                </button>
-            </span>
-        </div>
-    </section>
-    <section class="section section-tight">
-        <div id="fileUploadSection" class="container">
-            <!-- <div class="file has-name is-fullwidth">
-                <label class="file-label">
-                    <input class="file-input" type="file" id="fileInput">
-                    <span class="file-cta">
-                        <span class="file-icon">
-                            <i class="fas fa-upload"></i>
-                        </span>
-
-                        <span class="file-label">
-                            Upload your Macro JS file
-                        </span>
-                    </span>
-                    <span class="file-name" id="fileName">
-                        Upload Macro to Start
-                    </span>
-                </label>
-            </div> -->
-            <div class="is-flex is-justify-content-center is-align-items-center">
-                <div id="fileDropZone">
-                    <span id="fileDropMessage">Click or Drag & drop Macro .js file here ||</span>
-                    <input type="file" id="fileInput" style="display: none;" accept=".js">
-                    <span id="fileName">Upload Macro to Start</span>
-                </div>
+            <div class="endpoint-source" id="endpoint-source" hidden>
+              <span class="endpoint-source-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="11" rx="2" /><path d="M8 20h8M12 16v4" /></svg>
+              </span>
+              <div>
+                <strong id="endpoint-source-name">Connected endpoint</strong>
+                <p><span id="endpoint-source-host"></span> · <span id="endpoint-source-count">0 macros</span> retrieved with source content. Endpoint source remains in browser memory only.</p>
+              </div>
+              <span class="endpoint-connected-badge"><i></i>Connected</span>
             </div>
-            <!-- <div id="results">Upload a Macro File or Connect Your Cisco Endpoint</div> -->
-        </div>
-    </section>
-    <section id="results-container" class="section">
-        <div id="results" style="height: 60vh; width: 100%;"></div>
-    </section>
+            <div class="macro-list-summary" id="macro-list-summary" hidden>
+              <span class="macro-list-summary-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M8 6h11M8 12h11M8 18h11" /><circle cx="4" cy="6" r="1" /><circle cx="4" cy="12" r="1" /><circle cx="4" cy="18" r="1" /></svg>
+              </span>
+              <div>
+                <strong id="macro-list-summary-title">Macro set ready</strong>
+                <p id="macro-list-summary-detail"></p>
+              </div>
+              <button class="button button-secondary" id="macro-list-button" type="button">Review macro set</button>
+            </div>
+          </section>
 
-    <footer id="pid-footer" class="footer py-2 is-fixed-bottom">
-        <div class="content has-text-centered">
-            <p>
-                CTG - Technical Marketing Engineering
-                <span class="icon is-medium">
-                    <i class="fa-brands fa-github"></i>
-                </span>
-                <a href="https://github.com/ctg-tme" target="_blank">View the CTG Repository on Github</a>
-                © <span id="currentYear">2025</span> Webex by Cisco <br />
-            </p>
+          <section class="input-section scope-section" aria-labelledby="scope-title">
+            <div class="section-title-row">
+              <div><span class="step-number">2</span><h2 id="scope-title">Analyze version coverage</h2></div>
+            </div>
+            <div class="analysis-scope">
+              <span class="scope-icon" id="scope-version-count" aria-hidden="true">—</span>
+              <div>
+                <strong>Exploratory Analysis across validated RoomOS versions</strong>
+                <p id="analysis-scope-count">Loading the schema catalog…</p>
+              </div>
+            </div>
+            <ul class="scope-list">
+              <li>No Declared Target is assumed; each static xAPI path is checked in every schema snapshot.</li>
+              <li>Only versions containing every path appear in the overview.</li>
+              <li>Parent branch matches remain eligible and are marked with a warning.</li>
+            </ul>
+
+            <div class="analysis-action">
+              <button class="button button-primary" id="analyze-button" type="button" disabled>
+                <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m15.5 15.5 4 4" /></svg>
+                <span>Analyze macro</span>
+              </button>
+              <div class="analysis-status">
+                <p id="readiness-message" role="status">Add a macro file. The schema catalog is loading.</p>
+                <div class="analysis-progress" id="analysis-progress" hidden>
+                  <div
+                    class="analysis-progress-track"
+                    id="analysis-progress-track"
+                    role="progressbar"
+                    aria-label="RoomOS schema evaluation progress"
+                    aria-valuemin="0"
+                    aria-valuemax="0"
+                    aria-valuenow="0"
+                  >
+                    <i id="analysis-progress-fill"></i>
+                  </div>
+                  <strong id="analysis-progress-value">0 of 0</strong>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
+      </section>
+
+      <section class="results-section" id="results" aria-labelledby="results-title" hidden>
+        <div class="results-header">
+          <div>
+            <p class="eyebrow">Analysis complete</p>
+            <h2 id="results-title">Macro results</h2>
+            <p id="result-context"></p>
+          </div>
+          <div class="result-actions">
+            <button class="button button-secondary" id="copy-button" type="button">Copy JSON</button>
+            <button class="button button-secondary" id="export-button" type="button">Export JSON</button>
+          </div>
+        </div>
+
+        <div class="result-tabs" role="tablist" aria-label="Analysis results">
+          <button type="button" role="tab" aria-selected="true" data-result-tab="overview">Overview</button>
+          <button type="button" role="tab" aria-selected="false" data-result-tab="relationships"><span class="tab-label">Entries &amp; Dependencies</span><span class="tab-count" id="relationships-tab-count">0</span></button>
+          <button type="button" role="tab" aria-selected="false" data-result-tab="issues"><span class="tab-label">General Issues</span><span class="tab-count" id="issues-tab-count">0</span></button>
+          <button type="button" role="tab" aria-selected="false" data-result-tab="android-container"><span class="tab-label">Android Issues</span><span class="tab-count" id="android-container-tab-count">0</span></button>
+          <button type="button" role="tab" aria-selected="false" data-result-tab="xapi"><span class="tab-label">xAPI References</span><span class="tab-count" id="xapi-tab-count">0</span></button>
+          <button type="button" role="tab" aria-selected="false" data-result-tab="json">Raw JSON</button>
+        </div>
+
+        <div class="tab-panel" id="tab-overview" role="tabpanel">
+          <div class="summary-grid" id="summary-grid"></div>
+          <div class="overview-grid">
+            <section class="result-card">
+              <div class="card-heading"><div><p class="card-kicker">Macro contents</p><h3>xAPI usage by type</h3></div></div>
+              <div id="branch-summary" class="branch-summary"></div>
+            </section>
+            <section class="result-card">
+              <div class="card-heading"><div><p class="card-kicker">RoomOS relationship</p><h3>RoomOS schema availability</h3></div></div>
+              <div id="schema-summary" class="schema-summary"></div>
+            </section>
+          </div>
+          <details class="analysis-notes">
+            <summary>Analysis notes and limits</summary>
+            <div id="coverage-content"></div>
+          </details>
+        </div>
+
+        <div class="tab-panel" id="tab-relationships" role="tabpanel" hidden>
+          <div class="panel-toolbar">
+            <div><h3>Entries and dependencies</h3><p>Review each analyzed Entry Macro, its supplied dependency tree, missing local imports, and external domains.</p></div>
+          </div>
+          <section class="result-card">
+            <div id="macro-relationships" class="macro-relationships"></div>
+          </section>
+        </div>
+
+        <div class="tab-panel" id="tab-issues" role="tabpanel" hidden>
+          <div class="panel-toolbar">
+            <div><h3>General Issues grouped by macro</h3><p>Open one macro to review its Required, Warning, Advisory, and Informational Findings together.</p></div>
+            <div class="finding-filters" id="finding-filters" aria-label="Filter issues"></div>
+          </div>
+          <div class="finding-list" id="finding-list"></div>
+        </div>
+
+        <div class="tab-panel" id="tab-android-container" role="tabpanel" hidden>
+          <section class="container-explainer" aria-labelledby="android-container-issues-title">
+            <p class="card-kicker">What this means</p>
+            <h3 id="android-container-issues-title">Android Container deployments</h3>
+            <p>The Android Container refers to device deployments running Microsoft Teams Rooms or Zoom Rooms software on top of RoomOS.</p>
+            <p>This view interprets each xAPI kind using the availability convention established by the newest schema: extension allowlists for configurations and statuses, command allowlists or unavailable-state denylists, and feature-dependent events. A schema with no Android Container metadata is treated as not supporting the container. Conflicting evidence or a missing kind-specific convention in a metadata-bearing schema is reported as unknown.</p>
+            <p class="schema-boundary-note compact"><strong>This is Microsoft Teams schema evidence, not a runtime test.</strong> The schemas do not provide equivalent general availability metadata for Zoom Rooms. Availability can also depend on the device, configuration, permissions, connected hardware, and software running inside the container.</p>
+          </section>
+          <section class="result-card android-readiness-detail-card" aria-labelledby="android-readiness-detail-title">
+            <div class="card-heading">
+              <div><p class="card-kicker">Latest RoomOS schema</p><h3 id="android-readiness-detail-title">Android Container schema availability</h3></div>
+            </div>
+            <div id="android-container-readiness-detail"></div>
+          </section>
+          <div class="container-issue-summary" id="android-container-issue-summary"></div>
+          <div class="panel-toolbar android-issues-toolbar">
+            <div><h3>Android Issues grouped by macro</h3><p>Open one macro to review its explicitly unavailable, not found, and unknown xAPI paths together.</p></div>
+          </div>
+          <div class="container-issue-list" id="android-container-issue-list"></div>
+        </div>
+
+        <div class="tab-panel" id="tab-xapi" role="tabpanel" hidden>
+          <div class="panel-toolbar">
+            <div><h3>xAPI References grouped by macro</h3><p>Open one macro to review its xAPI paths and version availability.</p></div>
+            <div class="xapi-controls">
+              <label class="visually-hidden" for="xapi-search">Search xAPI references</label>
+              <input id="xapi-search" type="search" placeholder="Search paths" />
+              <label class="visually-hidden" for="xapi-kind-filter">Filter by type</label>
+              <select id="xapi-kind-filter"><option value="all">All types</option><option value="Command">Commands</option><option value="Configuration">Configurations</option><option value="Status">Statuses</option><option value="Event">Events</option></select>
+            </div>
+          </div>
+          <div class="reference-list" id="reference-list"></div>
+        </div>
+
+        <div class="tab-panel" id="tab-json" role="tabpanel" hidden>
+          <div class="raw-heading"><div><h3>Analysis Session 1.0.0</h3><p>The canonical export contains the analyzed source inventory, every verified schema and per-schema report, cross-schema comparison, relationships, subscription metrics, effective Rule Pack, and provenance. It never includes uploaded JavaScript source or complete external URL paths.</p></div></div>
+          <pre id="raw-json"></pre>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div><img class="brand-mark small" src="/favicon.svg" width="23" height="23" alt="" aria-hidden="true" /><strong>Cisco Macro Analyzer</strong></div>
+      <p>© <span id="current-year">2026</span> Cisco Systems, Inc. <span class="footer-separator" aria-hidden="true">||</span> Created by the Collaboration TME team <span class="footer-separator" aria-hidden="true">||</span> <a href="https://github.com/ctg-tme/Cisco-Macro-Analytics/issues/new" target="_blank" rel="noopener noreferrer">Bugs / Suggestions</a></p>
     </footer>
 
-    <!-- Modals Start-->
-
-    <!-- Connect Endpoint Modal -->
-
-    <div id="connect-endpoint-modal" class="modal">
-        <div class="modal-background"></div>
-        <div class="modal-card">
-            <header class="modal-card-head modal-is-primary">
-                <p class="modal-card-title">Connect to Cisco Video Endpoint</p>
-                <button class="delete" aria-label="close"></button>
-            </header>
-            <section class="modal-card-body">
-                <div class="content">
-                    <div class="notification is-danger has-text-centered">
-                        <button class=""></button>
-                        Endpoint Connection is under construction and unusable until work is complete.
-                        <br>
-                        Please Disregard this section, and use the File Upload tool.
-                    </div>
-                    <p>Connect to your Cisco Video Endpoint over a WebSocket and execute the various functions of this
-                        site accross all macros installed onm your endpoint.
-                        <br>
-                        <br>
-                        Provide your devices IP Address/DNS Host Name, the local admin username and password to connect.
-                        <br>
-                        <br>
-                    <p><strong>If using a Self Signed Cert, please login to the WebUI of you device using the same
-                            browser before attempting to connect.</strong></p>
-                    </p>
-                    <form>
-                        <div class="field">
-                            <p class="control has-icons-left has-icons-right">
-                                <input class="input" type="text" placeholder="IP Address" />
-                                <span class="icon is-small is-left">
-                                    <i class="fa-solid fa-globe"></i>
-                                </span>
-                            </p>
-                        </div>
-                        <div class="field">
-                            <p class="control has-icons-left">
-                                <input class="input" type="text" placeholder="Username" />
-                                <span class="icon is-small is-left">
-                                    <i class="fa-solid fa-user"></i>
-                                </span>
-                            </p>
-                        </div>
-                        <div class="field">
-                            <p class="control has-icons-left">
-                                <input class="input" type="password" autocomplete="current-password"
-                                    placeholder="Password" />
-                                <span class="icon is-small is-left">
-                                    <i class="fas fa-lock"></i>
-                                </span>
-                            </p>
-                        </div>
-                    </form>
-                    <p><strong>Note: </strong>No changes will be made to macros running on your device.</p>
-                </div>
-            </section>
-            <footer class="modal-card-foot">
-                <div class=" buttons">
-                    <button class="button">Cancel</button>
-                    <span class="has-tooltip-arrow has-tooltip-top" data-tooltip="In Development">
-                        <button class="button is-success" disabled>Connect</button>
-                    </span>
-                </div>
-            </footer>
+    <dialog class="macro-list-dialog" id="macro-list-dialog" aria-labelledby="macro-list-dialog-title">
+      <div class="dialog-heading">
+        <div><p class="card-kicker">Analysis inputs</p><h2 id="macro-list-dialog-title">Macro list</h2></div>
+        <button class="icon-button" data-dialog-close="macro-list-dialog" type="button" aria-label="Close Macro list">×</button>
+      </div>
+      <p id="macro-list-dialog-context">Choose which files to include in analysis.</p>
+      <div class="file-list-wrap" id="file-list-wrap" hidden>
+        <div class="macro-selection-toolbar">
+          <span id="macro-selection-count" aria-live="polite">0 of 0 included</span>
+          <div>
+            <button class="button button-quiet macro-bulk-button" id="macro-select-all" type="button">Include all</button>
+            <button class="button button-quiet macro-bulk-button" id="macro-clear-all" type="button">Exclude all</button>
+          </div>
         </div>
-    </div>
+        <ul class="file-list" id="file-list" aria-label="Uploaded macro files"></ul>
+        <p class="field-help">Checked files are included in the submitted Macro Set. Unchecked files are excluded from parsing, dependency resolution, findings, counts, and exports; imports that target them are reported as missing. Entry Macros are inferred from the included files. Analysis begins only when you select “Analyze macro” after closing this window.</p>
+      </div>
+      <form method="dialog"><button class="button button-primary" type="submit">Done</button></form>
+    </dialog>
 
-    <!-- About Modal -->
+    <dialog class="dependency-map-dialog" id="dependency-map-dialog" aria-labelledby="dependency-map-title">
+      <div class="dialog-heading">
+        <div><p class="card-kicker">Entry Macro relationships</p><h2 id="dependency-map-title">Dependency map</h2></div>
+        <button class="icon-button" data-dialog-close="dependency-map-dialog" type="button" aria-label="Close Dependency map">×</button>
+      </div>
+      <p id="dependency-map-context">Arrows point from each macro to the dependencies identified in its source.</p>
+      <div class="dependency-map-summary" id="dependency-map-summary" aria-label="Dependency map totals"></div>
+      <div class="dependency-map-legend" aria-label="Dependency map legend">
+        <span class="entry"><i></i>Entry Macro</span>
+        <span class="macro"><i></i>Macro</span>
+        <span class="missing"><i></i>Missing dependency</span>
+        <span class="external"><i></i>Domain · in use</span>
+        <span class="external-not-in-use"><i></i>Domain · not in use</span>
+      </div>
+      <div class="dependency-map-canvas" id="dependency-map-canvas"></div>
+      <form method="dialog"><button class="button button-primary" type="submit">Close</button></form>
+    </dialog>
 
-    <div id="about-modal" class="modal">
-        <div class="modal-background"></div>
-        <div class="modal-card">
-            <header class="modal-card-head modal-is-info">
-                <p class="modal-card-title">About Cisco Macro Analyzer</p>
-                <button class="delete" aria-label="close"></button>
-            </header>
-            <section class="modal-card-body">
-                <div class="content">
-                    <p>The Cisco Macro Analyzer parses Macro Code to aid in documentation of your solution and/or
-                        troubleshoot existing solutions.
-                        <br>
-                        <br>
-                        Once parsed, it will provide the following details of your Macro Code
-                    </p>
-
-                    <ul>
-                        <li>Errors
-                            <ul>
-                                <li>Shows Common JS Syntax Errors
-                                    <ul>
-                                        <li>Performs same check as RoomOS Today</li>
-                                        <li>Adds additional check for generic use of the module object</li>
-                                        <li>Add additional check for use of module.name</li>
-                                        <li>Provides Search Regex and possible replacement suggestions</li>
-                                    </ul>
-                                </li>
-                            </ul>
-                        </li>
-                        <li>Warnings
-                            <ul>
-                                <li>Duplicate Subscriber Warnings</li>
-                                <li>Duplicate xAPI Call Warnings</li>
-                                <li>Use of Old xAPI Syntax</li>
-                                <li>Use of Mixed xAPI Syntax</li>
-                            </ul>
-                        </li>
-                        <li>xAPI References
-                            <ul>
-                                <li>The Full Branch and Path</li>
-                                <li>A Hyperlink to its documentation on the RoomOS Site</li>
-                                <li>How it was used (Set, Get or Subscribed too)</li>
-                                <li>Its recurrence in your script</li>
-                            </ul>
-                        </li>
-                    </ul>
-                </div>
-            </section>
-            <footer class="modal-card-foot modal-is-info">
-                <div class="content">
-                    <ul>
-                        <li>App Version: <span class="appVersion">0.1.1</span></li>
-                    </ul>
-                </div>
-            </footer>
+    <dialog id="endpoint-dialog" aria-labelledby="endpoint-dialog-title">
+      <div class="dialog-heading">
+        <div><p class="card-kicker">Read-only endpoint source</p><h2 id="endpoint-dialog-title">Connect endpoint</h2></div>
+        <button class="icon-button" data-dialog-close="endpoint-dialog" type="button" aria-label="Close endpoint connection">×</button>
+      </div>
+      <p>Sign in directly to the RoomOS endpoint over a secure WebSocket. The analyzer will retrieve every macro with source content, then let you choose which ones should start analysis.</p>
+      <form class="endpoint-form" id="endpoint-form">
+        <div class="recent-endpoints" id="recent-endpoints" hidden>
+          <div class="recent-endpoints-heading">
+            <strong>Recent endpoints</strong>
+            <span>Select a device to reuse its address</span>
+          </div>
+          <div class="recent-endpoint-list" id="recent-endpoint-list" aria-label="Previously connected endpoints"></div>
         </div>
-    </div>
-
-    <!-- App Info Modal -->
-
-    <div id="appInfo-modal" class="modal">
-        <div class="modal-background"></div>
-        <div class="modal-card">
-            <header class="modal-card-head modal-is-info">
-                <p class="modal-card-title">App Information</p>
-                <button class="delete" aria-label="close"></button>
-            </header>
-            <section class="modal-card-body">
-                <div class="content">
-                    <ul>
-                        <li>App Version: <span class="appVersion">0.1.1</span></li>
-                        <li>App Dependencies: </li>
-                    </ul>
-                    <span class="appDependency"></span>
-                </div>
-            </section>
-            <footer class="modal-card-foot modal-is-info">
-                <div class="content">
-                    <span class="icon is-medium">
-                        <i class="fa-brands fa-github"></i>
-                    </span>
-                    <a href="https://github.com/ctg-tme/Cisco-Macro-Analytics" target="_blank">View Source on Github</a>
-                </div>
-            </footer>
+        <div class="endpoint-fields">
+          <label class="dialog-field" for="endpoint-host">
+            <span>Endpoint address</span>
+            <input id="endpoint-host" name="host" type="text" inputmode="url" placeholder="room-kit.example.com" autocomplete="off" required />
+          </label>
+          <label class="dialog-field" for="endpoint-username">
+            <span>Username</span>
+            <input id="endpoint-username" name="username" type="text" autocomplete="username" required />
+          </label>
+          <label class="dialog-field" for="endpoint-password">
+            <span>Password</span>
+            <input id="endpoint-password" name="password" type="password" autocomplete="current-password" required />
+          </label>
         </div>
-    </div>
-
-    <!-- News Modal -->
-
-    <div id="news-modal" class="modal">
-        <div class="modal-background"></div>
-        <div class="modal-card">
-            <header class="modal-card-head modal-is-primary">
-                <p class="modal-card-title">What's new in Version <span class="appVersion">0.1.1</span></p>
-                <button class="delete" aria-label="close"></button>
-            </header>
-            <section class="modal-card-body">
-                <div class="content">
-                    <span class="appNews"></span>
-                </div>
-            </section>
-            <footer class="modal-card-foot modal-is-primary">
-                <div class="content">
-                    <span class="icon is-medium">
-                        <i class="fa-brands fa-github"></i>
-                    </span>
-                    <a href="https://github.com/ctg-tme/Cisco-Macro-Analytics/releases" target="_blank">Check the
-                        Release Notes for More Details</a>
-                </div>
-            </footer>
+        <p class="endpoint-privacy-note">After a successful connection, this browser saves only the endpoint address and device broadcast name for up to five recent devices. Usernames and passwords are never saved; the password is cleared after every connection attempt.</p>
+        <div class="endpoint-error" id="endpoint-error" role="alert" hidden></div>
+        <a class="certificate-link" id="endpoint-certificate-link" target="_blank" rel="noopener noreferrer" hidden>Open the endpoint certificate page, trust it in this browser, then retry.</a>
+        <div class="dialog-actions">
+          <button class="button button-quiet" data-dialog-close="endpoint-dialog" type="button">Cancel</button>
+          <button class="button button-primary" id="endpoint-connect-submit" type="submit">Connect and review macros</button>
         </div>
-    </div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.0/min/vs/loader.js"></script>
-    <script>
-        require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.0/min/vs' } });
-        function loadResults(data, location) {
-            console.log('data')
-            require(['vs/editor/editor.main'], function () {
-                monaco.editor.create(document.getElementById(location), {
-                    value: data,
-                    language: 'json',
-                    automaticLayout: true,
-                    theme: "vs-dark",
-                    readOnly: true
-                });
-            });
-        }
-    </script>
-    <script src="scripts/monaco.js"></script>
-    <script src="scripts/bulmaModals.js"></script>
-    <script src="scripts/styleAdjustements.js"></script>
-    <script src="scripts/analyzeMacro.js"></script>
-    <script src="scripts/fileUpload.js"></script>
-</body>
+      </form>
+    </dialog>
 
+    <dialog id="endpoint-disconnect-dialog" aria-labelledby="endpoint-disconnect-title">
+      <div class="dialog-heading">
+        <div><p class="card-kicker">Connected endpoint</p><h2 id="endpoint-disconnect-title">Disconnect endpoint?</h2></div>
+        <button class="icon-button" data-dialog-close="endpoint-disconnect-dialog" type="button" aria-label="Close disconnect confirmation">×</button>
+      </div>
+      <p>Disconnecting closes the WebSocket and clears the endpoint macros and their current analysis from browser memory. Manual file upload will become available again.</p>
+      <form method="dialog">
+        <button class="button button-quiet" type="submit">Keep connected</button>
+        <button class="button button-danger" id="endpoint-disconnect-confirm" type="button">Disconnect</button>
+      </form>
+    </dialog>
+
+    <dialog id="about-dialog" aria-labelledby="about-title">
+      <div class="dialog-heading"><div><p class="card-kicker">About</p><h2 id="about-title">Cisco Macro Analyzer</h2></div><button class="icon-button" data-dialog-close="about-dialog" type="button" aria-label="Close About">×</button></div>
+      <p>This tool parses RoomOS macro JavaScript to help document and review a solution. It shows xAPI references, how often and how they are used, schema relationships, syntax recommendations, and anything the parser could not determine.</p>
+      <p>It can retrieve macro source from an explicitly connected endpoint, but it does not run macros or change endpoint state. Complete schema coverage means every static xAPI path appears in a byte-verified snapshot; it does not confirm product support, endpoint configuration, connected physical I/O, permissions, or runtime behavior.</p>
+      <form method="dialog"><button class="button button-primary" type="submit">Close</button></form>
+    </dialog>
+
+    <dialog id="privacy-dialog" aria-labelledby="privacy-title">
+      <div class="dialog-heading"><div><p class="card-kicker">Privacy</p><h2 id="privacy-title">Analysis stays in this browser</h2></div><button class="icon-button" data-dialog-close="privacy-dialog" type="button" aria-label="Close Privacy">×</button></div>
+      <ul class="dialog-list"><li>Uploaded or endpoint-retrieved JavaScript is parsed locally.</li><li>Endpoint credentials and macro source are not sent to an analysis service.</li><li>Only the address and broadcast name of up to five successfully connected endpoints are saved in this browser; usernames and passwords are not saved.</li><li>Anonymous Aptabase Product Telemetry records successful endpoint connections, manual Macro loading, and aggregate counts after a completed analysis. It never includes Macro names, source content, Endpoint identity or address, credentials, Declared Targets, or report findings.</li><li>Product Telemetry is disabled when the Aptabase app key is not configured.</li><li>JSON exports omit the original source text.</li></ul>
+      <form method="dialog"><button class="button button-primary" type="submit">Close</button></form>
+    </dialog>
+  </body>
 </html>

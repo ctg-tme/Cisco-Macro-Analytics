@@ -1,0 +1,972 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://macro-analyzer.local/schema/analysis-report-2.2.0.json",
+  "title": "Cisco Macro Analyzer Analysis Report 2.2.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "reportId",
+    "generatedAt",
+    "provenance",
+    "target",
+    "fileInventory",
+    "observationLedger",
+    "observationCoverage",
+    "directDependencyGraph",
+    "unresolvedDependencyEdges",
+    "findings",
+    "findingImpacts",
+    "coverage",
+    "inventory",
+    "limitations"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "2.2.0" },
+    "reportId": { "type": "string", "pattern": "^report-[a-f0-9]{8}$" },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "provenance": { "$ref": "#/$defs/provenance" },
+    "target": { "$ref": "#/$defs/target" },
+    "fileInventory": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/fileInventoryEntry" }
+    },
+    "observationLedger": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/observation" }
+    },
+    "observationCoverage": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/fileObservationCoverage" }
+    },
+    "directDependencyGraph": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/directDependencyEdge" }
+    },
+    "unresolvedDependencyEdges": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/unresolvedDependencyEdge" }
+    },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" }
+    },
+    "findingImpacts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/findingImpact" }
+    },
+    "coverage": { "$ref": "#/$defs/evidenceCoverage" },
+    "inventory": { "$ref": "#/$defs/derivedInventory" },
+    "limitations": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    }
+  },
+  "$defs": {
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["line", "column"],
+      "properties": {
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "$ref": "#/$defs/position" },
+        "end": { "$ref": "#/$defs/position" }
+      }
+    },
+    "sourceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fileId", "fileContentHash", "range"],
+      "properties": {
+        "fileId": { "type": "string", "minLength": 1 },
+        "fileContentHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "range": { "$ref": "#/$defs/range" }
+      }
+    },
+    "target": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "release", "productModel", "operatingMode", "runtimeRole"],
+          "properties": {
+            "kind": { "const": "declared" },
+            "release": { "type": "string", "minLength": 1 },
+            "productModel": { "type": "string", "minLength": 1 },
+            "operatingMode": { "enum": ["Native", "MTR"] },
+            "runtimeRole": { "enum": ["Admin", "Integrator", "User"] }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": { "const": "exploratory" },
+            "partial": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "release": { "type": "string", "minLength": 1 },
+                "productModel": { "type": "string", "minLength": 1 },
+                "operatingMode": { "enum": ["Native", "MTR"] },
+                "runtimeRole": { "enum": ["Admin", "Integrator", "User"] }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "versionIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reportSchema",
+        "analyzer",
+        "parser",
+        "rulePack",
+        "credentialVocabulary",
+        "recognizedMacroGlobals",
+        "schemaSnapshot",
+        "declaredTarget"
+      ],
+      "properties": {
+        "reportSchema": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "version"],
+          "properties": {
+            "id": { "const": "analysis-report" },
+            "version": { "const": "2.2.0" }
+          }
+        },
+        "analyzer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version"],
+          "properties": {
+            "name": { "const": "Cisco Macro Analyzer" },
+            "version": { "type": "string", "minLength": 1 }
+          }
+        },
+        "parser": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version"],
+          "properties": {
+            "name": { "const": "Acorn" },
+            "version": { "type": "string", "minLength": 1 }
+          }
+        },
+        "rulePack": { "$ref": "#/$defs/versionIdentity" },
+        "credentialVocabulary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "version"],
+          "properties": {
+            "id": { "const": "macro-credential-vocabulary" },
+            "version": { "type": "string", "minLength": 1 }
+          }
+        },
+        "recognizedMacroGlobals": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "version"],
+          "properties": {
+            "id": { "const": "roomos-macro-globals" },
+            "version": { "type": "string", "minLength": 1 }
+          }
+        },
+        "schemaSnapshot": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "release", "sha256", "objectCount", "upstreamUpdatedAt"],
+          "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "release": { "type": "string", "minLength": 1 },
+            "sha256": { "type": "string", "minLength": 1 },
+            "objectCount": { "type": "integer", "minimum": 0 },
+            "upstreamUpdatedAt": { "type": "string", "minLength": 1 }
+          }
+        },
+        "declaredTarget": { "$ref": "#/$defs/target" }
+      }
+    },
+    "fileInventoryEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fileId",
+        "path",
+        "contentHash",
+        "roles",
+        "activeState",
+        "analysisState",
+        "affectedEntryMacroIds"
+      ],
+      "properties": {
+        "fileId": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "contentHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "roles": {
+          "type": "array",
+          "items": { "enum": ["Entry", "Dependency"] },
+          "uniqueItems": true
+        },
+        "activeState": { "enum": ["Active", "Inactive", "Unknown"] },
+        "analysisState": { "enum": ["Evaluated", "Parse failed", "Not in analyzed graph"] },
+        "affectedEntryMacroIds": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      }
+    },
+    "observationCoverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["family", "state"],
+      "properties": {
+        "family": {
+          "enum": [
+            "imports",
+            "external-domains",
+            "parser-diagnostics",
+            "module-syntax",
+            "lexical-scope",
+            "credential-indicators",
+            "xapi-bindings",
+            "xapi-touchpoints"
+          ]
+        },
+        "state": { "enum": ["Complete", "Partial", "Not evaluated"] },
+        "reason": { "type": "string", "minLength": 1 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "enum": ["Partial", "Not evaluated"] } } },
+          "then": { "required": ["reason"] }
+        }
+      ]
+    },
+    "fileObservationCoverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fileId", "families"],
+      "properties": {
+        "fileId": { "type": "string", "minLength": 1 },
+        "families": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/observationCoverage" },
+          "minItems": 8,
+          "maxItems": 8
+        }
+      }
+    },
+    "dependencyCrossing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fromFileId", "toFileId"],
+      "properties": {
+        "fromFileId": { "type": "string", "minLength": 1 },
+        "toFileId": { "type": "string", "minLength": 1 }
+      }
+    },
+    "routeHop": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bindingName", "transformation", "sourceReference"],
+      "properties": {
+        "bindingName": { "type": "string", "minLength": 1 },
+        "transformation": {
+          "enum": [
+            "module-origin",
+            "commonjs-origin",
+            "re-export",
+            "import",
+            "alias",
+            "assignment",
+            "destructure",
+            "argument-to-parameter",
+            "method-argument-to-parameter",
+            "constructor-argument-to-parameter",
+            "return",
+            "instance-property",
+            "object-property",
+            "touchpoint"
+          ]
+        },
+        "sourceReference": { "$ref": "#/$defs/sourceReference" },
+        "dependencyCrossing": { "$ref": "#/$defs/dependencyCrossing" }
+      }
+    },
+    "bindingRoute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hops"],
+      "properties": {
+        "hops": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/routeHop" },
+          "minItems": 1
+        }
+      }
+    },
+    "canonicalReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "normalizedPathSegments", "operation", "complete"],
+      "properties": {
+        "kind": { "enum": ["Command", "Configuration", "Status", "Event"] },
+        "normalizedPathSegments": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "operation": { "enum": ["execute", "get", "set", "subscribe"] },
+        "complete": { "type": "boolean" },
+        "preferredNewStyleExpression": { "type": "string", "minLength": 1 },
+        "documentationUrl": { "type": "string", "format": "uri" },
+        "limitation": { "type": "string", "minLength": 1 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "complete": { "const": true } } },
+          "then": { "required": ["preferredNewStyleExpression", "documentationUrl"] },
+          "else": {
+            "required": ["limitation"],
+            "not": {
+              "anyOf": [
+                { "required": ["preferredNewStyleExpression"] },
+                { "required": ["documentationUrl"] }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "argumentPropertyShape": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "detectableValueType", "valueForm", "containerForm"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "detectableValueType": { "type": "string", "minLength": 1 },
+        "valueForm": { "enum": ["static", "dynamic"] },
+        "containerForm": { "type": "string", "minLength": 1 }
+      }
+    },
+    "argumentPositionShape": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "position",
+        "containerForm",
+        "detectableValueType",
+        "valueForm",
+        "propertyNames"
+      ],
+      "properties": {
+        "position": { "type": "integer", "minimum": 0 },
+        "containerForm": { "type": "string", "minLength": 1 },
+        "detectableValueType": { "type": "string", "minLength": 1 },
+        "valueForm": { "enum": ["static", "dynamic"] },
+        "propertyNames": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "properties": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/argumentPropertyShape" }
+        }
+      }
+    },
+    "argumentShape": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["argumentCount", "positions"],
+      "properties": {
+        "argumentCount": { "type": "integer", "minimum": 0 },
+        "positions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/argumentPositionShape" }
+        }
+      }
+    },
+    "constraint": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string" },
+        "minimum": { "type": "number" },
+        "maximum": { "type": "number" },
+        "allowedValues": {
+          "type": "array",
+          "items": { "type": ["string", "number", "boolean"] }
+        }
+      }
+    },
+    "schemaParameter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "required"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "required": { "type": "boolean" },
+        "type": { "type": "string" },
+        "minimum": { "type": "number" },
+        "maximum": { "type": "number" },
+        "allowedValues": {
+          "type": "array",
+          "items": { "type": ["string", "number", "boolean"] }
+        }
+      }
+    },
+    "schemaEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "existsInSnapshot",
+        "matchKind",
+        "documentationUrl",
+        "product",
+        "operatingMode",
+        "role",
+        "parameters"
+      ],
+      "properties": {
+        "existsInSnapshot": { "type": "boolean" },
+        "matchKind": { "enum": ["exact", "parent", "none"] },
+        "snapshotObjectId": { "type": ["string", "number"] },
+        "descendantCount": { "type": "integer", "minimum": 1 },
+        "descendantPaths": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "documentationUrl": { "type": "string", "format": "uri" },
+        "product": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "supportedProducts"],
+          "properties": {
+            "status": { "enum": ["supported", "not-supported", "not-declared", "not-restricted", "unknown"] },
+            "declaredProduct": { "type": "string" },
+            "supportedProducts": {
+              "type": "array",
+              "items": { "type": "string" },
+              "uniqueItems": true
+            }
+          }
+        },
+        "operatingMode": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "supportsMtr", "basis"],
+          "properties": {
+            "status": { "enum": ["supported", "not-supported", "not-declared", "unknown"] },
+            "declaredMode": { "enum": ["Native", "MTR"] },
+            "supportsMtr": { "type": ["boolean", "null"] },
+            "basis": {
+              "enum": [
+                "extension-marker",
+                "teams-unavailable-state",
+                "feature-dependent-event",
+                "missing-metadata",
+                "conflicting-metadata",
+                "path-not-found"
+              ]
+            }
+          }
+        },
+        "role": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "allowedRoles"],
+          "properties": {
+            "status": { "enum": ["supported", "not-supported", "not-declared", "not-restricted", "unknown"] },
+            "declaredRole": { "enum": ["Admin", "Integrator", "User"] },
+            "allowedRoles": {
+              "type": "array",
+              "items": { "type": "string" },
+              "uniqueItems": true
+            }
+          }
+        },
+        "parameters": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/schemaParameter" }
+        },
+        "valueConstraint": { "$ref": "#/$defs/constraint" }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "family", "kind", "sourceReference"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^obs-[a-f0-9]{8}$" },
+        "family": {
+          "enum": [
+            "imports",
+            "external-domains",
+            "parser-diagnostics",
+            "module-syntax",
+            "lexical-scope",
+            "credential-indicators",
+            "xapi-bindings",
+            "xapi-touchpoints"
+          ]
+        },
+        "kind": {
+          "enum": [
+            "local-import",
+            "external-domain",
+            "parser-diagnostic",
+            "commonjs-syntax",
+            "unresolved-identifier",
+            "credential-indicator",
+            "xapi-root-binding",
+            "xapi-binding-flow",
+            "xapi-flow-frontier",
+            "xapi-touchpoint"
+          ]
+        },
+        "sourceReference": { "$ref": "#/$defs/sourceReference" },
+        "limitations": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        },
+        "normalizedExpectedPath": { "type": "string", "minLength": 1 },
+        "resolution": { "enum": ["resolved", "unresolved", "dynamic"] },
+        "dependencyFileId": { "type": "string", "minLength": 1 },
+        "domain": { "type": "string", "minLength": 1 },
+        "protocol": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9+.-]*$"
+        },
+        "usage": {
+          "enum": [
+            "xapi-parameter",
+            "xml-payload",
+            "xapi-parameter-and-xml-payload",
+            "not-in-use"
+          ]
+        },
+        "code": { "const": "parse-error" },
+        "message": { "type": "string", "minLength": 1 },
+        "form": {
+          "enum": ["require", "module-member", "exports-member", "__filename", "__dirname"]
+        },
+        "identifier": { "type": "string", "minLength": 1 },
+        "category": { "type": "string", "minLength": 1 },
+        "canonicalTerm": { "type": "string", "minLength": 1 },
+        "submittedTerm": { "type": "string", "minLength": 1 },
+        "location": { "enum": ["source", "filename"] },
+        "bindingName": { "type": "string", "minLength": 1 },
+        "origin": { "enum": ["esm-import", "commonjs-require", "re-export"] },
+        "conventionalName": { "type": "boolean" },
+        "route": { "$ref": "#/$defs/bindingRoute" },
+        "transformation": {
+          "enum": [
+            "module-origin",
+            "commonjs-origin",
+            "re-export",
+            "import",
+            "alias",
+            "assignment",
+            "destructure",
+            "argument-to-parameter",
+            "method-argument-to-parameter",
+            "constructor-argument-to-parameter",
+            "return",
+            "instance-property",
+            "object-property",
+            "touchpoint"
+          ]
+        },
+        "frontierType": {
+          "enum": ["computed-path", "opaque-call", "mixed-flow", "dynamic-transformation"]
+        },
+        "knownPathPrefix": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "routes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/bindingRoute" },
+          "minItems": 1
+        },
+        "relatedObservationIds": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^obs-[a-f0-9]{8}$" },
+          "uniqueItems": true
+        },
+        "submittedSyntax": { "enum": ["new-style", "old-style"] },
+        "canonicalReference": { "$ref": "#/$defs/canonicalReference" },
+        "argumentShape": { "$ref": "#/$defs/argumentShape" },
+        "bindingRoutes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/bindingRoute" },
+          "minItems": 1
+        },
+        "availability": {
+          "enum": [
+            "available-in-declared-schema",
+            "available-in-selected-schema",
+            "not-in-declared-schema",
+            "unavailable-for-product",
+            "unavailable-for-mode",
+            "unavailable-for-role",
+            "unknown-for-mode",
+            "unknown-in-exploratory-analysis"
+          ]
+        },
+        "schemaEvidence": { "$ref": "#/$defs/schemaEvidence" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "local-import" } } },
+          "then": { "required": ["normalizedExpectedPath", "resolution"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "external-domain" } } },
+          "then": { "required": ["domain", "protocol", "usage"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "parser-diagnostic" } } },
+          "then": { "required": ["code", "message"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "commonjs-syntax" } } },
+          "then": { "required": ["form"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "unresolved-identifier" } } },
+          "then": { "required": ["identifier"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "credential-indicator" } } },
+          "then": {
+            "required": ["category", "canonicalTerm", "submittedTerm", "location"]
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "xapi-root-binding" } } },
+          "then": {
+            "required": ["bindingName", "origin", "conventionalName", "route"]
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "xapi-binding-flow" } } },
+          "then": { "required": ["bindingName", "transformation", "route"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "xapi-flow-frontier" } } },
+          "then": { "required": ["frontierType", "knownPathPrefix", "routes"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "xapi-touchpoint" } } },
+          "then": {
+            "required": [
+              "submittedSyntax",
+              "canonicalReference",
+              "argumentShape",
+              "bindingRoutes",
+              "availability"
+            ]
+          }
+        }
+      ]
+    },
+    "directDependencyEdge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["importerFileId", "dependencyFileId", "observationId"],
+      "properties": {
+        "importerFileId": { "type": "string", "minLength": 1 },
+        "dependencyFileId": { "type": "string", "minLength": 1 },
+        "observationId": { "type": "string", "pattern": "^obs-[a-f0-9]{8}$" }
+      }
+    },
+    "dependencyRoute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entryMacroId", "fileIds"],
+      "properties": {
+        "entryMacroId": { "type": "string", "minLength": 1 },
+        "fileIds": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 2
+        }
+      }
+    },
+    "unresolvedDependencyEdge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "virtualFileId",
+        "normalizedExpectedPath",
+        "importerFileIds",
+        "observationIds",
+        "affectedEntryMacroIds",
+        "dependencyRoutes",
+        "state"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^unresolved-edge-[a-f0-9]{8}$" },
+        "virtualFileId": { "type": "string", "pattern": "^missing-[a-f0-9]{8}$" },
+        "normalizedExpectedPath": { "type": "string", "minLength": 1 },
+        "importerFileIds": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "observationIds": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^obs-[a-f0-9]{8}$" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "affectedEntryMacroIds": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "dependencyRoutes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/dependencyRoute" },
+          "minItems": 1
+        },
+        "state": { "const": "Not evaluated" }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "rule",
+        "code",
+        "title",
+        "summary",
+        "category",
+        "evidence",
+        "priority",
+        "observationIds",
+        "sourceFileIds",
+        "affectedEntryMacroIds",
+        "technicalBasis",
+        "limitations",
+        "recommendedAction"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^finding-[a-f0-9]{8}$" },
+        "rule": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "version", "applicability", "evidenceRequirements"],
+          "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "version": { "type": "string", "minLength": 1 },
+            "applicability": { "enum": ["target-dependent", "target-independent"] },
+            "evidenceRequirements": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "minItems": 1,
+              "uniqueItems": true
+            }
+          }
+        },
+        "code": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string", "minLength": 1 },
+        "category": {
+          "enum": ["Coverage", "Schema", "Security", "Syntax", "xAPI Touchpoints"]
+        },
+        "evidence": { "enum": ["observed-finding", "potential-risk", "unknown"] },
+        "priority": { "enum": ["required", "warning", "advisory", "informational"] },
+        "observationIds": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^obs-[a-f0-9]{8}$" },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "sourceFileIds": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "affectedEntryMacroIds": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "technicalBasis": { "type": "string", "minLength": 1 },
+        "limitations": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        },
+        "recommendedAction": { "type": "string", "minLength": 1 },
+        "citation": { "type": "string", "format": "uri" },
+        "relatedXapiReference": { "$ref": "#/$defs/canonicalReference" },
+        "relatedSchemaSnapshotId": { "type": "string", "minLength": 1 },
+        "details": { "type": "object" }
+      }
+    },
+    "findingImpact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["findingId", "sourceFileId", "impact"],
+      "properties": {
+        "findingId": { "type": "string", "pattern": "^finding-[a-f0-9]{8}$" },
+        "sourceFileId": { "type": "string", "minLength": 1 },
+        "impact": { "enum": ["direct", "dependency"] },
+        "entryMacroId": { "type": "string", "minLength": 1 },
+        "dependencyPath": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 2
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "impact": { "const": "dependency" } } },
+          "then": { "required": ["entryMacroId", "dependencyPath"] }
+        }
+      ]
+    },
+    "evidenceCoverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["files", "imports", "xapiReferences", "completeness"],
+      "properties": {
+        "files": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["supplied", "reachable", "parsed", "failed", "notInAnalyzedGraph"],
+          "properties": {
+            "supplied": { "type": "integer", "minimum": 0 },
+            "reachable": { "type": "integer", "minimum": 0 },
+            "parsed": { "type": "integer", "minimum": 0 },
+            "failed": { "type": "integer", "minimum": 0 },
+            "notInAnalyzedGraph": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "imports": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["localResolved", "localUnresolved", "dynamic"],
+          "properties": {
+            "localResolved": { "type": "integer", "minimum": 0 },
+            "localUnresolved": { "type": "integer", "minimum": 0 },
+            "dynamic": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "xapiReferences": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["candidates", "staticallyResolved", "dynamic", "dynamicArguments"],
+          "properties": {
+            "candidates": { "type": "integer", "minimum": 0 },
+            "staticallyResolved": { "type": "integer", "minimum": 0 },
+            "dynamic": { "type": "integer", "minimum": 0 },
+            "dynamicArguments": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "completeness": { "enum": ["complete-for-explicit-source-evidence", "partial"] }
+      }
+    },
+    "apiReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "observationId",
+        "kind",
+        "path",
+        "operation",
+        "syntax",
+        "availability",
+        "schemaEvidence",
+        "entryMacroIds",
+        "source"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^api-[a-f0-9]{8}$" },
+        "observationId": { "type": "string", "pattern": "^obs-[a-f0-9]{8}$" },
+        "kind": { "enum": ["Command", "Configuration", "Status", "Event"] },
+        "path": { "type": "string", "minLength": 1 },
+        "operation": { "enum": ["execute", "get", "set", "subscribe"] },
+        "syntax": { "enum": ["modern", "legacy"] },
+        "availability": {
+          "enum": [
+            "available-in-declared-schema",
+            "available-in-selected-schema",
+            "not-in-declared-schema",
+            "unavailable-for-product",
+            "unavailable-for-mode",
+            "unavailable-for-role",
+            "unknown-for-mode",
+            "unknown-in-exploratory-analysis"
+          ]
+        },
+        "schemaEvidence": { "$ref": "#/$defs/schemaEvidence" },
+        "entryMacroIds": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "source": { "$ref": "#/$defs/sourceReference" }
+      }
+    },
+    "derivedInventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["references", "counts"],
+      "properties": {
+        "references": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/apiReference" }
+        },
+        "counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["Command", "Configuration", "Status", "Event"],
+          "properties": {
+            "Command": { "type": "integer", "minimum": 0 },
+            "Configuration": { "type": "integer", "minimum": 0 },
+            "Status": { "type": "integer", "minimum": 0 },
+            "Event": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    }
+  }
+}

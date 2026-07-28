@@ -2,3 +2,12 @@
 sampleEvalData.json
 sampleSchemaData.json
 .DS_Store
+.scratch/
+node_modules/
+dist/
+public/schemas/
+.env
+.env.local
+.env.*
+!.env.example
+!.env.*.example

@@ -1,0 +1,3 @@
+# Keep initial live diagnostics read-only
+
+Macro Diagnostics will be a separate, explicit live mode that initially collects only time-stamped device identity, RoomOS details, macro inventory and enabled state, logs, and relevant status or configuration evidence. It will not execute commands or change Endpoint state, credentials remain local, and Runtime Evidence retains provenance separate from static findings. This limits automated probing but prevents a diagnostic session from altering the system it is trying to explain; any future state-changing capability requires a new explicit safety decision.
