@@ -8,6 +8,16 @@ Agents may create local commits for completed work without requesting additional
 
 After completing any work, agents must verify that port `5176` is serving this repository's page. If nothing is listening, they must start this repository's local development server. If another page is being served, they must stop that process and start this repository's local development server. They must post the server address in the task chat unless it has already been posted in that task on the same calendar day.
 
+## Interface Presentation
+
+The Macro Analyzer uses the Magnetic Common Design System as its user-interface styling contract. The local reference implementation is `/Users/bomcgoni/Documents/GitHub/magnetic-common-design-system`. Magnetic semantic tokens, component dimensions, focus treatment, typography, borders, and interaction states govern the interface in both `magnetic-light` and `magnetic-dark` themes. A one-off treatment is acceptable only when Magnetic has no applicable styling option.
+
+The winter presentation is an additive seasonal layer, not a replacement design system. It may add restrained frost, snow, lights, and related artwork while preserving Magnetic component behavior, accessibility, and light/dark theme semantics. Decorative lights communicate container hierarchy: a major outer container may receive one strand around its outside edge, while nested cards, Findings, source reviews, and other inner panels retain Magnetic styling with at most a subtle frost treatment. Standard dialogs show a complete four-sided outer frame. A full-screen dialog uses the viewport perimeter because no outside edge is visible.
+
+Native dialogs enter the browser top layer. Winter snow intended to appear above a dialog must therefore be rendered inside that dialog rather than relying on the page-level snowfall layer. All decorative overlays remain non-interactive, respect reduced-motion preferences, and must not introduce clipping, horizontal overflow, obscured controls, or unreadable content. The private `?winter=true` preview path exists so seasonal presentation can be verified outside December.
+
+New user-facing surfaces inherit these requirements. Representative result views and both standard and full-screen dialogs should be visually checked in light and dark winter modes, alongside regression tests for the styling contract.
+
 ## Language
 
 **Macro**:

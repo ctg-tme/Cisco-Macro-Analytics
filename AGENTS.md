@@ -12,6 +12,26 @@ Use the default five-role vocabulary. See `docs/agents/triage-labels.md`.
 
 This is a single-context repository using root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
 
+### Interface design system
+
+Treat the Magnetic Common Design System as the styling authority for every user-facing interface. Use `/Users/bomcgoni/Documents/GitHub/magnetic-common-design-system` as the reference implementation.
+
+- Prefer Magnetic semantic tokens and component contracts over one-off colors, borders, spacing, focus states, or typography.
+- Preserve the `data-cds-theme="magnetic-light|magnetic-dark"` contract and verify both themes.
+- Do not introduce Momentum Design System packages, tokens, class names, or imports.
+- Depart from Magnetic only when the reference has no applicable styling option or for the additive winter presentation.
+- When the public Magnetic theme package is unavailable, keep the application’s consumed semantic-token subset synchronized with the reference repository and covered by regression tests.
+- Apply the same design-system treatment to new dialogs, result views, source-review interfaces, maps, and other newly added surfaces.
+
+Winter presentation remains seasonal and additive:
+
+- keep decorative light strands on the outside edge of major outer containers only; never repeat them on nested cards, findings, source reviews, or other inner panels;
+- use subtle frost treatment for inner panels instead of additional light frames;
+- render all four light-frame sides on standard dialogs, and use the viewport perimeter for full-screen dialogs;
+- render modal snowflakes from inside each dialog so they remain above the browser top layer, with `pointer-events: none`;
+- preserve reduced-motion behavior and the `?winter=true` preview path;
+- visually verify representative standard and full-screen dialogs, new interfaces, horizontal overflow, and browser console output in light and dark winter modes.
+
 ### Product version
 
 Treat the **Product Version** defined in `CONTEXT.md` as part of every completed user-visible change set. Before handing off a feature or fix:

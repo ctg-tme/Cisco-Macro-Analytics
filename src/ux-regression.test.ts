@@ -55,9 +55,11 @@ describe('Cisco Macro Analyzer product shell', () => {
 
   it('uses the beta-banner yellow favicon only when served locally', () => {
     expect(html).toContain('<link rel="icon" href="/favicon.svg" type="image/svg+xml" />');
-    expect(publicFavicon).toContain('fill="#65d2ff"');
-    expect(localFavicon).toContain('fill="#f9b817"');
-    expect(css).toMatch(/\.beta-banner \{[^}]*background: #f9b817;/s);
+    expect(publicFavicon).toContain('fill="#649ef5"');
+    expect(localFavicon).toContain('fill="#f0c243"');
+    expect(css).toMatch(
+      /\.beta-banner \{[^}]*background: var\(--warning-bg-default\);/s,
+    );
     expect(viteConfig).toContain("command === 'serve'");
     expect(viteConfig).toContain('html.replace(publicFavicon, localFavicon)');
   });
@@ -78,8 +80,8 @@ describe('Cisco Macro Analyzer product shell', () => {
   });
 
   it('shows the beta release and current copyright in the product shell', () => {
-    expect(manifest.Version).toBe('0.6.5-BETA');
-    expect(packageMetadata.version).toBe('0.6.5-beta');
+    expect(manifest.Version).toBe('0.6.9-BETA');
+    expect(packageMetadata.version).toBe('0.6.9-beta');
     expect(packageMetadata.version).toBe(manifest.Version.toLowerCase());
     expect(packageLockMetadata.version).toBe(packageMetadata.version);
     expect(packageLockMetadata.packages[''].version).toBe(packageMetadata.version);
@@ -117,8 +119,15 @@ describe('Cisco Macro Analyzer product shell', () => {
     expect(html).toContain('<option value="light">Light</option>');
     expect(html).toContain('<option value="dark">Dark</option>');
     expect(html).not.toContain('id="theme-button"');
+    expect(html).toContain('data-cds-theme="magnetic-dark"');
     expect(main).toContain("window.matchMedia('(prefers-color-scheme: dark)')");
+    expect(main).toContain(
+      "root.dataset.cdsTheme = dark ? 'magnetic-dark' : 'magnetic-light'",
+    );
     expect(main).toContain("systemColorScheme.addEventListener('change'");
+    expect(css).toContain(':root[data-cds-theme="magnetic-light"]');
+    expect(css).not.toContain('@momentum-design');
+    expect(css).not.toContain('mds-theme-stable');
   });
 
   it('keeps the winter treatment seasonal and previewable', () => {
@@ -127,9 +136,51 @@ describe('Cisco Macro Analyzer product shell', () => {
     expect(css).toContain('.winter-theme :is(');
     expect(css).toContain('url("/winter-light-row.svg")');
     expect(css).toContain('url("/winter-light-column.svg")');
-    expect(css).toContain('.results-section .summary-card');
-    expect(css).toContain('.results-section .reference-card');
+    expect(css).toContain('.results-section .macro-finding-section');
+    expect(css).toContain('.results-section .macro-reference-section');
+    expect(css).toMatch(
+      /\.winter-theme :is\([^)]*\.issue-source-review,[^)]*\.dependency-map-canvas[^)]*\) \{\s+box-shadow: inset/s,
+    );
+    expect(css).toContain('.winter-theme dialog:not(.dependency-map-dialog)');
+    expect(css).toContain('.winter-theme .dependency-map-dialog');
+    expect(css).toContain('.winter-theme .brand-mark');
     expect(css).not.toContain('winter-lights-live');
+  });
+
+  it('keeps winter lights outside outer result containers', () => {
+    const lightFrameRule = css.match(
+      /\.winter-theme :is\(([^)]*)\)::before \{([^}]*)\}/,
+    );
+
+    expect(lightFrameRule).not.toBeNull();
+    expect(lightFrameRule?.[1]).toContain('.results-section .macro-overview-section');
+    expect(lightFrameRule?.[1]).toContain('.results-section .macro-finding-section');
+    expect(lightFrameRule?.[1]).toContain('.results-section .macro-reference-section');
+    expect(lightFrameRule?.[1]).not.toContain('.results-section .summary-card');
+    expect(lightFrameRule?.[1]).not.toContain('.results-section .finding');
+    expect(lightFrameRule?.[1]).not.toContain('.results-section .issue-source-review');
+    expect(lightFrameRule?.[1]).not.toContain('.results-section .reference-card');
+    expect(lightFrameRule?.[2]).toContain(
+      'inset: var(--winter-light-inset, -8px)',
+    );
+  });
+
+  it('keeps complete winter frames and snowfall above every modal', () => {
+    expect(css).toMatch(
+      /\.winter-theme dialog:not\(\.dependency-map-dialog\)::before \{[^}]*url\("\/winter-light-row\.svg"\) 0 100%/s,
+    );
+    expect(css).toMatch(
+      /\.winter-theme \.dependency-map-dialog::before \{[^}]*inset: 0/s,
+    );
+    expect(css).toMatch(
+      /\.winter-modal-snowfall \{[^}]*z-index: 20;[^}]*pointer-events: none;/s,
+    );
+    expect(main).toContain(
+      "document.querySelectorAll<HTMLDialogElement>('dialog')",
+    );
+    expect(main).toContain(
+      "modalSnowfall.className = 'winter-modal-snowfall'",
+    );
   });
 
   it('does not ask the author to choose a schema or device profile', () => {
@@ -153,11 +204,12 @@ describe('Cisco Macro Analyzer product shell', () => {
     expect(html).not.toContain('Macro Diagnostics home');
   });
 
-  it('presents result tabs as large, visibly interactive controls', () => {
-    expect(css).toContain('.result-tabs button { min-height: 50px');
+  it('presents result tabs as Magnetic secondary tabs', () => {
+    expect(css).toContain('.result-tabs button { min-height: 39px');
     expect(css).toContain('.result-tabs button:not([aria-selected="true"]):hover');
     expect(css).toContain('.result-tabs button:active');
-    expect(css).toContain('border-radius: 9px 9px 0 0');
+    expect(css).toContain('border-bottom: 3px solid transparent');
+    expect(css).toContain('border-bottom-color: var(--interact-border-medium-active)');
   });
 
   it('uses Android Container as the user-facing operating-mode term', () => {
@@ -233,30 +285,47 @@ describe('Cisco Macro Analyzer product shell', () => {
     expect(main).not.toContain('Could not determine on these versions');
   });
 
-  it('keeps local source previews collapsed in both issue views', () => {
+  it('shows one local source preview at a time in both issue views', () => {
     expect(main).toContain('renderFindingSourceEvidence(finding, snippetSources, sourceReviews)');
-    expect(main).toContain('referenceGroup.references.map(renderSourceOccurrence)');
+    expect(main).toContain('`finding:${finding.id}`');
+    expect(main).toContain('`android:${issueGroup.key}:${issue.key}`');
+    expect(main).toContain('sourceReferences,');
+    expect(main).toContain('sourceReviews,');
+    expect(main).toContain('data-source-review-frame');
     expect(main).toContain('<details class="source-snippet">');
     expect(main).not.toContain('<details class="source-snippet" open>');
     expect(main).not.toContain('maskSensitiveSourceLine');
     expect(css).toContain('.source-code-line.highlighted');
   });
 
-  it('keeps authentication vocabulary review compact with a dismissible source queue', () => {
-    expect(main).toContain('function renderCredentialSourceReview(');
-    expect(main).toContain('function bindCredentialSourceReviewControls(');
+  it('uses one compact, dismissible source queue for every issue type', () => {
+    const sourceReview = main.slice(
+      main.indexOf('function renderIssueSourceReview('),
+      main.indexOf('function renderFindingSourceEvidence('),
+    );
+
+    expect(main).toContain('function renderIssueSourceReview(');
+    expect(main).toContain('function bindIssueSourceReviewControls(');
+    expect(main).toContain('renderIssueSourceReview(\n    `finding:${finding.id}`');
+    expect(main).toContain('${renderIssueSourceReview(\n            `android:${issueGroup.key}:${issue.key}`');
     expect(main).toContain("finding.code === 'source.sensitive-credential-indicator'");
-    expect(main).toContain('<strong>${sourceCount} source locations</strong> combine');
+    expect(main).toContain('combine ${finding.observationIds.length} matched phrases');
     expect(main).toContain('data-source-review-dismiss');
     expect(main).toContain('data-source-review-restore');
     expect(main).toContain('data-source-review-direction="previous"');
     expect(main).toContain('data-source-review-direction="next"');
-    expect(main).toContain('sourceReviews.set(finding.id, sourceReferences)');
-    expect(main).toContain('state.dismissedCredentialLocations');
+    expect(sourceReview).toContain('>Dismiss issue</button>');
+    expect(sourceReview).not.toContain('Dismiss location');
+    expect(sourceReview.indexOf('>Next location</button>')).toBeLessThan(
+      sourceReview.indexOf('>Dismiss issue</button>'),
+    );
+    expect(main).toContain('sourceReviews.set(reviewId, sourceReferences)');
+    expect(main).toContain('state.dismissedIssueLocations');
     expect(main).toContain('Dismissal affects only this local review');
-    expect(main).toContain('The canonical Finding and exported report are unchanged');
-    expect(css).toContain('.credential-source-review');
+    expect(main).toContain('The analysis result and exported report are unchanged');
+    expect(css).toContain('.issue-source-review');
     expect(css).toContain('.source-review-controls');
+    expect(css).toContain('.source-review-actions');
     expect(css).toContain('.source-review-empty');
   });
 
@@ -302,7 +371,7 @@ describe('Cisco Macro Analyzer product shell', () => {
     expect(renderFiles).not.toContain('renderDependencyTree');
     expect(renderFiles).not.toContain('data-finding-scope');
     expect(css).toContain('.macro-relationships');
-    expect(css).toContain('border: 1px dotted #8464c8');
+    expect(css).toContain('border: 1px dotted var(--dependency)');
   });
 
   it('opens a visual Dependency map from each Entry Macro', () => {

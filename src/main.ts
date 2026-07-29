@@ -126,14 +126,14 @@ const state: {
   recentEndpoints: RecentEndpoint[];
   findingFilter: FindingFilter;
   findingScope?: FindingScope;
-  dismissedCredentialLocations: Map<string, Set<string>>;
+  dismissedIssueLocations: Map<string, Set<string>>;
   referenceSearch: string;
   referenceKind: 'all' | ApiKind;
 } = {
   files: [],
   recentEndpoints: loadRecentEndpoints(),
   findingFilter: 'all',
-  dismissedCredentialLocations: new Map(),
+  dismissedIssueLocations: new Map(),
   referenceSearch: '',
   referenceKind: 'all',
 };
@@ -144,8 +144,7 @@ function applyThemeMode(mode: ThemeMode): void {
   const dark = resolvesToDarkTheme(mode, systemColorScheme.matches);
   const root = document.documentElement;
   root.dataset.theme = mode;
-  root.classList.toggle('mds-theme-stable-darkWebex', dark);
-  root.classList.toggle('mds-theme-stable-lightWebex', !dark);
+  root.dataset.cdsTheme = dark ? 'magnetic-dark' : 'magnetic-light';
 }
 
 let themeMode = loadThemeMode();
@@ -272,6 +271,7 @@ function applySeasonalPresentation(): void {
   const winterActive = isWinterActive(new Date(), previewOverride);
   elements.body.classList.toggle('winter-theme', winterActive);
   elements.winterSnowfall.hidden = !winterActive;
+  const dialogs = document.querySelectorAll<HTMLDialogElement>('dialog');
 
   if (winterActive) {
     const snowflakes = Array.from({ length: 18 }, () => {
@@ -280,6 +280,23 @@ function applySeasonalPresentation(): void {
       return snowflake;
     });
     elements.winterSnowfall.replaceChildren(...snowflakes);
+
+    for (const dialog of dialogs) {
+      const modalSnowfall = document.createElement('div');
+      modalSnowfall.className = 'winter-modal-snowfall';
+      modalSnowfall.ariaHidden = 'true';
+      modalSnowfall.replaceChildren(...Array.from({ length: 10 }, () => {
+        const snowflake = document.createElement('span');
+        snowflake.textContent = '❄';
+        return snowflake;
+      }));
+      dialog.querySelector('.winter-modal-snowfall')?.remove();
+      dialog.append(modalSnowfall);
+    }
+  } else {
+    for (const dialog of dialogs) {
+      dialog.querySelector('.winter-modal-snowfall')?.remove();
+    }
   }
 }
 
@@ -445,7 +462,7 @@ function resetAnalysis(): void {
   state.analysisError = undefined;
   state.analysisImportError = undefined;
   state.importedAnalysisName = undefined;
-  state.dismissedCredentialLocations.clear();
+  state.dismissedIssueLocations.clear();
   elements.results.hidden = true;
 }
 
@@ -1944,7 +1961,7 @@ function renderCredentialTerms(report: AnalysisReport, finding: Finding): string
   </section>`;
 }
 
-function credentialSourceLocationKey(sourceReference: SourceReference): string {
+function issueSourceLocationKey(sourceReference: SourceReference): string {
   return [
     sourceReference.fileId,
     sourceReference.range.start.line,
@@ -1961,25 +1978,26 @@ function sourceReviewProgressLabel(
   return `${position} of ${remainingCount} remaining${dismissedCount > 0 ? ` · ${dismissedCount} dismissed` : ''}`;
 }
 
-function renderCredentialSourceReview(
-  finding: Finding,
+function renderIssueSourceReview(
+  reviewId: string,
   sourceReferences: SourceReference[],
   sourceReviews: Map<string, SourceReference[]>,
+  description: string,
 ): string {
   if (sourceReferences.length === 0) return '';
-  sourceReviews.set(finding.id, sourceReferences);
+  sourceReviews.set(reviewId, sourceReferences);
   const sourceCount = sourceReferences.length;
-  const dismissed = state.dismissedCredentialLocations.get(finding.id) ?? new Set<string>();
+  const dismissed = state.dismissedIssueLocations.get(reviewId) ?? new Set<string>();
   const remainingReferences = sourceReferences.filter(
-    (sourceReference) => !dismissed.has(credentialSourceLocationKey(sourceReference)),
+    (sourceReference) => !dismissed.has(issueSourceLocationKey(sourceReference)),
   );
   const firstReference = remainingReferences[0];
   const dismissedCount = sourceCount - remainingReferences.length;
-  return `<section class="finding-evidence credential-source-review" data-source-review="${escapeHtml(finding.id)}">
+  return `<section class="finding-evidence issue-source-review" data-source-review="${escapeHtml(reviewId)}">
     <div class="source-review-heading">
       <div>
-        <h5>Review matched source</h5>
-        <p><strong>${sourceCount} source locations</strong> combine ${finding.observationIds.length} matched phrases. Review them one at a time or dismiss locations that are not an issue.</p>
+        <h5>Review issue locations</h5>
+        <p>${description}</p>
       </div>
       <span data-source-review-count aria-live="polite">${sourceReviewProgressLabel(firstReference ? 1 : 0, remainingReferences.length, dismissedCount)}</span>
     </div>
@@ -1990,16 +2008,16 @@ function renderCredentialSourceReview(
         : ''}
     </div>
     <div class="source-review-empty" data-source-review-empty${firstReference ? ' hidden' : ''}>
-      <strong>All ${sourceCount} source locations dismissed</strong>
-      <p>The canonical Finding and exported report are unchanged.</p>
+      <strong>All ${sourceCount} ${sourceCount === 1 ? 'issue' : 'issues'} dismissed</strong>
+      <p>The analysis result and exported report are unchanged.</p>
     </div>
-    <p class="source-review-boundary">Dismissal affects only this local review and resets when you analyze again. It does not change the Finding or export.</p>
+    <p class="source-review-boundary">Dismissal affects only this local review and resets when you analyze again. It does not change the analysis result or export.</p>
     <div class="source-review-controls">
-      <button class="filter-button source-review-dismiss" type="button" data-source-review-dismiss${firstReference ? '' : ' disabled'}>Dismiss location</button>
-      <span class="source-review-navigation">
-        <button class="filter-button" type="button" data-source-review-restore${dismissedCount === 0 ? ' hidden' : ''}>Restore dismissed (${dismissedCount})</button>
+      <button class="filter-button" type="button" data-source-review-restore${dismissedCount === 0 ? ' hidden' : ''}>Restore dismissed (${dismissedCount})</button>
+      <span class="source-review-actions">
         <button class="filter-button" type="button" data-source-review-direction="previous" disabled>Previous location</button>
         <button class="filter-button" type="button" data-source-review-direction="next"${remainingReferences.length <= 1 ? ' disabled' : ''}>Next location</button>
+        <button class="filter-button source-review-dismiss" type="button" data-source-review-dismiss${firstReference ? '' : ' disabled'}>Dismiss issue</button>
       </span>
     </div>
   </section>`;
@@ -2010,16 +2028,22 @@ function renderFindingSourceEvidence(
   sourceReferences: SourceReference[],
   sourceReviews: Map<string, SourceReference[]>,
 ): string {
-  if (finding.code === 'source.sensitive-credential-indicator') {
-    return renderCredentialSourceReview(finding, sourceReferences, sourceReviews);
-  }
-  return sourceReferences.map((reference) => renderSourceSnippet(reference)).join('');
+  const description = finding.code === 'source.sensitive-credential-indicator'
+    ? `<strong>${sourceReferences.length} source ${sourceReferences.length === 1 ? 'location' : 'locations'}</strong> combine ${finding.observationIds.length} matched phrases. Review them one at a time or dismiss issues that do not need attention.`
+    : `<strong>${sourceReferences.length} source ${sourceReferences.length === 1 ? 'location' : 'locations'}</strong> support this Finding. Review them one at a time or dismiss issues that do not need attention.`;
+  return renderIssueSourceReview(
+    `finding:${finding.id}`,
+    sourceReferences,
+    sourceReviews,
+    description,
+  );
 }
 
-function bindCredentialSourceReviewControls(
+function bindIssueSourceReviewControls(
+  root: HTMLElement,
   sourceReviews: Map<string, SourceReference[]>,
 ): void {
-  elements.findingList.querySelectorAll<HTMLElement>('[data-source-review]').forEach((review) => {
+  root.querySelectorAll<HTMLElement>('[data-source-review]').forEach((review) => {
     const findingId = review.dataset.sourceReview;
     const sourceReferences = findingId ? sourceReviews.get(findingId) : undefined;
     const frame = review.querySelector<HTMLElement>('[data-source-review-frame]');
@@ -2033,10 +2057,10 @@ function bindCredentialSourceReviewControls(
 
     let currentIndex = 0;
     const remainingReferences = (): SourceReference[] => {
-      const dismissed = state.dismissedCredentialLocations.get(findingId ?? '');
+      const dismissed = state.dismissedIssueLocations.get(findingId ?? '');
       return dismissed
         ? sourceReferences.filter(
-          (sourceReference) => !dismissed.has(credentialSourceLocationKey(sourceReference)),
+          (sourceReference) => !dismissed.has(issueSourceLocationKey(sourceReference)),
         )
         : sourceReferences;
     };
@@ -2068,14 +2092,14 @@ function bindCredentialSourceReviewControls(
     dismiss.addEventListener('click', () => {
       const sourceReference = remainingReferences()[currentIndex];
       if (!findingId || !sourceReference) return;
-      const dismissed = state.dismissedCredentialLocations.get(findingId) ?? new Set<string>();
-      dismissed.add(credentialSourceLocationKey(sourceReference));
-      state.dismissedCredentialLocations.set(findingId, dismissed);
+      const dismissed = state.dismissedIssueLocations.get(findingId) ?? new Set<string>();
+      dismissed.add(issueSourceLocationKey(sourceReference));
+      state.dismissedIssueLocations.set(findingId, dismissed);
       showSource();
     });
     restore.addEventListener('click', () => {
       if (!findingId) return;
-      state.dismissedCredentialLocations.delete(findingId);
+      state.dismissedIssueLocations.delete(findingId);
       currentIndex = 0;
       showSource();
     });
@@ -2207,7 +2231,7 @@ function renderFindingList(report: AnalysisReport): void {
   elements.findingList.innerHTML = groups.length > 0
     ? groups.map(renderMacroFindingSection).join('')
     : '<div class="empty-state compact">No Findings match the current view.</div>';
-  bindCredentialSourceReviewControls(sourceReviews);
+  bindIssueSourceReviewControls(elements.findingList, sourceReviews);
 }
 
 function renderFindings(report: AnalysisReport): void {
@@ -2224,6 +2248,7 @@ function renderFindings(report: AnalysisReport): void {
 function renderAndroidContainerIssues(report: AnalysisReport): void {
   const readiness = calculateAndroidContainerReadiness(report.inventory.references);
   const referenceGroups = new Map(groupReferences(report.inventory.references).map((group) => [group.key, group]));
+  const sourceReviews = new Map<string, SourceReference[]>();
   const issueGroups = groupAndroidContainerIssuesByMacro(
     report.fileInventory,
     report.inventory.references,
@@ -2311,6 +2336,7 @@ function renderAndroidContainerIssues(report: AnalysisReport): void {
         </div>
       </details>`;
     }).join('');
+  bindIssueSourceReviewControls(elements.androidContainerIssueList, sourceReviews);
 
   function renderAndroidContainerIssue(
     issueGroup: AndroidContainerIssueGroup,
@@ -2336,6 +2362,10 @@ function renderAndroidContainerIssues(report: AnalysisReport): void {
     const sourceSummary = issueGroup.kind === 'cross-macro'
       ? `${referenceGroup.references.length} ${referenceGroup.references.length === 1 ? 'use' : 'uses'} across ${new Set(referenceGroup.references.map((reference) => reference.source.fileId)).size} macros`
       : `${referenceGroup.references.length} ${referenceGroup.references.length === 1 ? 'use' : 'uses'}`;
+    const sourceReferences = [...new Map(referenceGroup.references.map((reference) => [
+      issueSourceLocationKey(reference.source),
+      reference.source,
+    ])).values()];
     return `<details class="container-issue-card ${issue.reason}">
         <summary>
           <span class="finding-summary-main">
@@ -2347,10 +2377,12 @@ function renderAndroidContainerIssues(report: AnalysisReport): void {
         </summary>
         <div class="container-issue-detail">
           <p>${escapeHtml(explanation)}</p>
-          <details>
-            <summary>Source occurrences</summary>
-            <ul class="occurrence-list">${referenceGroup.references.map(renderSourceOccurrence).join('')}</ul>
-          </details>
+          ${renderIssueSourceReview(
+            `android:${issueGroup.key}:${issue.key}`,
+            sourceReferences,
+            sourceReviews,
+            `<strong>${sourceReferences.length} source ${sourceReferences.length === 1 ? 'location uses' : 'locations use'}</strong> this xAPI path. Review them one at a time or dismiss issues that do not need attention.`,
+          )}
           <a class="roomos-link" href="${escapeHtml(representative.schemaEvidence.documentationUrl)}" target="_blank" rel="noreferrer">Open this xAPI in RoomOS documentation ↗</a>
         </div>
       </details>`;
@@ -2502,7 +2534,7 @@ function renderAnalysis(session: AnalysisSessionResult): void {
   state.analysis = session;
   state.findingFilter = 'all';
   state.findingScope = undefined;
-  state.dismissedCredentialLocations.clear();
+  state.dismissedIssueLocations.clear();
   state.referenceSearch = '';
   state.referenceKind = 'all';
   elements.xapiSearch.value = '';
