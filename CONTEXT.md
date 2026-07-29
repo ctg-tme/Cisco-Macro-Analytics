@@ -2,6 +2,12 @@
 
 This context defines the language used to assess and investigate RoomOS macros while keeping source-only findings distinct from conclusions based on observed device behavior.
 
+## Repository Working Agreement
+
+Agents may create local commits for completed work without requesting additional permission, but they must never push changes unless the user explicitly asks for a push.
+
+After completing any work, agents must verify that port `5176` is serving this repository's page. If nothing is listening, they must start this repository's local development server. If another page is being served, they must stop that process and start this repository's local development server. They must post the server address in the task chat unless it has already been posted in that task on the same calendar day.
+
 ## Language
 
 **Macro**:
