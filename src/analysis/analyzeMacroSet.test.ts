@@ -152,7 +152,14 @@ describe('analyzeMacroSet', () => {
     expect(result.report.inventory.references[1]?.source.range.start).toEqual({ line: 3, column: 1 });
     expect(result.report.findings).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'schema.literal-out-of-range', evidence: 'potential-risk', priority: 'required' }),
-      expect.objectContaining({ code: 'coverage.xapi-flow-frontier', evidence: 'unknown', priority: 'warning' }),
+      expect.objectContaining({
+        code: 'coverage.xapi-flow-frontier',
+        title: 'Dynamic xAPI Reference',
+        evidence: 'unknown',
+        priority: 'advisory',
+        summary: 'The complete xAPI path depends on content supplied at runtime, so the analyzer cannot verify the full reference.',
+        recommendedAction: 'Review and test the content injected into each xAPI reference on the target device before release. If an error occurs, verify the constructed path first.',
+      }),
     ]));
     expect(JSON.stringify(result.report)).not.toContain('{ Level: 120 }');
   });

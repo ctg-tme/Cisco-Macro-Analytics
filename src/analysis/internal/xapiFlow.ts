@@ -7,6 +7,9 @@ import type {
   ArgumentShape,
   CanonicalXapiReference,
   SourceReference,
+  UrlProvenanceHop,
+  UrlProvenanceRoute,
+  UrlProvenanceTransformation,
   XapiBindingFlowObservation,
   XapiBindingRoute,
   XapiBindingRouteHop,
@@ -72,6 +75,7 @@ interface PrimitiveValue {
   type: 'primitive';
   value: unknown;
   origins: FlowValueOrigin[];
+  structured?: FlowValue;
 }
 
 interface ArrayValue {
@@ -155,12 +159,14 @@ export interface FlowValueOrigin {
   fileId: string;
   start: number;
   end: number;
+  route: UrlProvenanceRoute;
 }
 
 export interface XapiArgumentUse {
   fileId: string;
   argumentRanges: Array<{ start: number; end: number }>;
   valueOrigins: FlowValueOrigin[];
+  touchpointSourceReference: SourceReference;
 }
 
 export interface XapiFlowAnalysis {
@@ -170,6 +176,9 @@ export interface XapiFlowAnalysis {
   touchpoints: FlowTouchpoint[];
   argumentUses: XapiArgumentUse[];
   xmlPayloadValueOrigins: FlowValueOrigin[];
+  readValueOrigins: FlowValueOrigin[];
+  loggingValueOrigins: FlowValueOrigin[];
+  opaqueValueOrigins: FlowValueOrigin[];
 }
 
 interface EvalContext {
@@ -196,7 +205,8 @@ function uniqueRoutes(routes: XapiBindingRoute[]): XapiBindingRoute[] {
 
 function uniqueOrigins(origins: FlowValueOrigin[]): FlowValueOrigin[] {
   return [...new Map(origins.map((origin) => [
-    `${origin.fileId}:${origin.start}:${origin.end}`,
+    `${origin.fileId}:${origin.start}:${origin.end}:${origin.route.hops.map((hop) =>
+      `${hop.transformation}:${hop.sourceReference.fileId}:${hop.sourceReference.range.start.line}:${hop.sourceReference.range.start.column}`).join('>')}`,
     origin,
   ])).values()];
 }
@@ -213,6 +223,42 @@ function valueOrigins(valueInput: FlowValue, seen = new Set<FlowValue>()): FlowV
     return uniqueOrigins([...value.properties.values()].flatMap((item) => valueOrigins(item, seen)));
   }
   return [];
+}
+
+function withUrlProvenanceHop(
+  valueInput: FlowValue,
+  hop: UrlProvenanceHop,
+  seen = new Map<FlowValue, FlowValue>(),
+): FlowValue {
+  const value = resolvedValue(valueInput);
+  const existing = seen.get(value);
+  if (existing) return existing;
+  if (value.type === 'primitive') {
+    const next: PrimitiveValue = {
+      ...value,
+      origins: value.origins.map((origin) => ({
+        ...origin,
+        route: { hops: [...origin.route.hops, hop] },
+      })),
+    };
+    seen.set(value, next);
+    return next;
+  }
+  if (value.type === 'array') {
+    const next: ArrayValue = { type: 'array', items: [] };
+    seen.set(value, next);
+    next.items = value.items.map((item) => withUrlProvenanceHop(item, hop, seen));
+    return next;
+  }
+  if (value.type === 'object') {
+    const next: ObjectValue = { type: 'object', id: value.id, properties: new Map() };
+    seen.set(value, next);
+    for (const [name, item] of value.properties) {
+      next.properties.set(name, withUrlProvenanceHop(item, hop, seen));
+    }
+    return next;
+  }
+  return value;
 }
 
 function normalizedAtoms(atoms: XapiAtom[]): XapiAtom[] {
@@ -235,7 +281,6 @@ function resolvedValue(value: FlowValue, seen = new Set<FlowValue>()): FlowValue
   seen.add(value);
   const exported = value.module.exports.get(value.exportName) ?? UNKNOWN;
   const resolved = resolvedValue(exported, seen);
-  if (resolved.type !== 'xapi') return resolved;
   const crossing = value.importerFile.file.id !== value.module.file.file.id
     ? {
         fromFileId: value.module.file.file.id,
@@ -247,6 +292,13 @@ function resolvedValue(value: FlowValue, seen = new Set<FlowValue>()): FlowValue
     hashes.get(value.importerFile.file.id) ?? '',
     sourceRange(value.importNode),
   );
+  if (resolved.type !== 'xapi') {
+    return withUrlProvenanceHop(resolved, {
+      transformation: 'import',
+      sourceReference: reference,
+      label: value.localName,
+    });
+  }
   const atoms = resolved.atoms.map((atom) => ({
     ...atom,
     routes: atom.routes.map((route) => ({
@@ -277,6 +329,33 @@ function mergeValues(leftValue: FlowValue, rightValue: FlowValue): FlowValue {
       type: 'primitive',
       value: left.value === right.value ? left.value : undefined,
       origins: uniqueOrigins([...left.origins, ...right.origins]),
+      ...(left.structured && right.structured
+        ? { structured: mergeValues(left.structured, right.structured) }
+        : left.structured
+          ? { structured: left.structured }
+          : right.structured
+            ? { structured: right.structured }
+            : {}),
+    };
+  }
+  if (left.type === 'array' && right.type === 'array') {
+    return { type: 'array', items: [...left.items, ...right.items] };
+  }
+  if (left.type === 'object' && right.type === 'object') {
+    const properties = new Map<string, FlowValue>();
+    for (const name of new Set([...left.properties.keys(), ...right.properties.keys()])) {
+      properties.set(
+        name,
+        mergeValues(
+          left.properties.get(name) ?? UNKNOWN,
+          right.properties.get(name) ?? UNKNOWN,
+        ),
+      );
+    }
+    return {
+      type: 'object',
+      id: `${left.id}|${right.id}`,
+      properties,
     };
   }
   return UNKNOWN;
@@ -455,16 +534,55 @@ export function analyzeXapiFlow(
   const touchpoints = new Map<string, FlowTouchpoint>();
   const argumentUses = new Map<string, XapiArgumentUse>();
   const xmlPayloadValueOrigins = new Map<string, FlowValueOrigin>();
+  const readValueOrigins = new Map<string, FlowValueOrigin>();
+  const loggingValueOrigins = new Map<string, FlowValueOrigin>();
+  const opaqueValueOrigins = new Map<string, FlowValueOrigin>();
   const functions = new Map<string, FunctionValue>();
   const activeCalls = new Set<string>();
 
   const dependencyByReference = new Map<string, string>();
+  const suppliedConsumerFileIds = new Set<string>();
   for (const edge of graph.directEdges) {
     dependencyByReference.set(`${edge.importer.id}:${edge.reference.node.start}`, edge.dependency.id);
+    suppliedConsumerFileIds.add(edge.dependency.id);
   }
 
   function reference(file: ParsedFile, node: LocatedNode): SourceReference {
     return sourceReference(file.file, contentHashes.get(file.file.id) ?? '', sourceRange(node));
+  }
+
+  function urlHop(
+    context: EvalContext,
+    node: LocatedNode,
+    transformation: UrlProvenanceTransformation,
+    label?: string,
+  ): UrlProvenanceHop {
+    return {
+      transformation,
+      sourceReference: reference(context.file, node),
+      ...(label ? { label } : {}),
+    };
+  }
+
+  function transformUrlValue(
+    value: FlowValue,
+    context: EvalContext,
+    node: LocatedNode,
+    transformation: UrlProvenanceTransformation,
+    label?: string,
+  ): FlowValue {
+    return withUrlProvenanceHop(value, urlHop(context, node, transformation, label));
+  }
+
+  function recordValueOrigins(
+    target: Map<string, FlowValueOrigin>,
+    origins: FlowValueOrigin[],
+  ): void {
+    for (const origin of origins) {
+      const key = `${origin.fileId}:${origin.start}:${origin.end}:${origin.route.hops.map((hop) =>
+        `${hop.transformation}:${hop.sourceReference.fileId}:${hop.sourceReference.range.start.line}:${hop.sourceReference.range.start.column}`).join('>')}`;
+      target.set(key, origin);
+    }
   }
 
   function addRouteHop(
@@ -711,7 +829,18 @@ export function analyzeXapiFlow(
       start: argument.start,
       end: argument.end,
     }));
-    const nextOrigins = uniqueOrigins(argumentValues.flatMap((argument) => valueOrigins(argument)));
+    const touchpointSourceReference = reference(context.file, node);
+    const touchpointHop: UrlProvenanceHop = {
+      transformation: 'xapi-argument',
+      sourceReference: touchpointSourceReference,
+      label: firstBindingName(calleeNode),
+    };
+    const nextOrigins = uniqueOrigins(argumentValues
+      .flatMap((argument) => valueOrigins(argument))
+      .map((origin) => ({
+        ...origin,
+        route: { hops: [...origin.route.hops, touchpointHop] },
+      })));
     argumentUses.set(argumentUseKey, {
       fileId: context.file.file.id,
       argumentRanges: [...new Map([
@@ -722,6 +851,7 @@ export function analyzeXapiFlow(
         ...(existingArgumentUse?.valueOrigins ?? []),
         ...nextOrigins,
       ]),
+      touchpointSourceReference,
     });
 
     const identities = new Set(resolvedAtoms.map((item) => pathIdentity(item.reference.canonical)));
@@ -844,13 +974,27 @@ export function analyzeXapiFlow(
     transformation: XapiBindingRouteHop['transformation'],
   ): void {
     const value = resolvedValue(initial);
+    const urlTransformation: UrlProvenanceTransformation =
+      transformation === 'assignment'
+        ? 'assignment'
+        : transformation === 'destructure'
+          ? 'destructure'
+          : transformation === 'argument-to-parameter'
+            || transformation === 'method-argument-to-parameter'
+            || transformation === 'constructor-argument-to-parameter'
+            ? 'argument-to-parameter'
+            : transformation === 'return'
+              ? 'return'
+              : transformation === 'object-property'
+                ? 'object-property'
+                : 'binding';
     if (pattern.type === 'Identifier') {
       const name = String(pattern.name);
       environment.declare(
         name,
         value.type === 'xapi'
           ? addRouteHop(value, context.file, pattern, name, transformation)
-          : value,
+          : transformUrlValue(value, context, pattern, urlTransformation, name),
       );
       return;
     }
@@ -863,9 +1007,35 @@ export function analyzeXapiFlow(
       return;
     }
     if (pattern.type === 'ObjectPattern') {
+      const selectedPropertyNames = new Set((pattern.properties as LocatedNode[]).flatMap((property) => {
+        if (property.type === 'RestElement') return [];
+        const key = property.key as LocatedNode;
+        const propertyName = property.computed
+          ? staticString(key)
+          : key.type === 'Identifier' ? String(key.name) : staticString(key);
+        return propertyName ? [propertyName] : [];
+      }));
       for (const property of pattern.properties as LocatedNode[]) {
         if (property.type === 'RestElement') {
-          addBindingValue(environment, property.argument as LocatedNode, UNKNOWN, context, transformation);
+          const restValue: FlowValue = value.type === 'object'
+            ? {
+                type: 'object',
+                id: `${value.id}:rest:${property.start}`,
+                properties: new Map([...value.properties]
+                  .filter(([name]) => !selectedPropertyNames.has(name))
+                  .map(([name, item]) => [
+                    name,
+                    transformUrlValue(item, context, property, 'spread', name),
+                  ])),
+              }
+            : UNKNOWN;
+          addBindingValue(
+            environment,
+            property.argument as LocatedNode,
+            restValue,
+            context,
+            'destructure',
+          );
           continue;
         }
         const key = property.key as LocatedNode;
@@ -889,7 +1059,21 @@ export function analyzeXapiFlow(
       const items = value.type === 'array' ? value.items : [];
       for (const [index, element] of (pattern.elements as Array<LocatedNode | null>).entries()) {
         if (element) {
-          addBindingValue(environment, element, items[index] ?? UNKNOWN, context, 'destructure');
+          if (element.type === 'RestElement') {
+            addBindingValue(
+              environment,
+              element.argument as LocatedNode,
+              {
+                type: 'array',
+                items: items.slice(index).map((item) =>
+                  transformUrlValue(item, context, element, 'spread', 'array rest')),
+              },
+              context,
+              'destructure',
+            );
+          } else {
+            addBindingValue(environment, element, items[index] ?? UNKNOWN, context, 'destructure');
+          }
         }
       }
     }
@@ -905,10 +1089,12 @@ export function analyzeXapiFlow(
     const value = resolvedValue(valueInput);
     if (!property) {
       if (value.type === 'xapi') addFrontier(value, context, member, 'dynamic-transformation', []);
+      recordValueOrigins(opaqueValueOrigins, valueOrigins(value));
       return;
     }
     if (object.type !== 'object') {
       if (value.type === 'xapi') addFrontier(value, context, member, 'opaque-call', []);
+      recordValueOrigins(opaqueValueOrigins, valueOrigins(value));
       return;
     }
     object.properties.set(
@@ -921,22 +1107,32 @@ export function analyzeXapiFlow(
             `${firstBindingName(member.object as LocatedNode)}.${property}`,
             (member.object as LocatedNode).type === 'ThisExpression' ? 'instance-property' : 'object-property',
           )
-        : value,
+        : transformUrlValue(value, context, member, 'object-property', property),
     );
   }
 
   function evaluateExpression(node: LocatedNode | undefined, context: EvalContext): FlowValue {
     if (!node) return NON_XAPI;
     switch (node.type) {
-      case 'Identifier':
-        return resolvedValue(context.environment.get(String(node.name)));
+      case 'Identifier': {
+        const value = resolvedValue(context.environment.get(String(node.name)));
+        recordValueOrigins(readValueOrigins, valueOrigins(value));
+        return value;
+      }
       case 'ThisExpression':
         return context.thisValue ?? NON_XAPI;
       case 'Literal':
         return {
           type: 'primitive',
           value: node.value,
-          origins: [{ fileId: context.file.file.id, start: node.start, end: node.end }],
+          origins: [{
+            fileId: context.file.file.id,
+            start: node.start,
+            end: node.end,
+            route: {
+              hops: [urlHop(context, node, 'literal')],
+            },
+          }],
         };
       case 'TemplateLiteral':
         {
@@ -947,17 +1143,38 @@ export function analyzeXapiFlow(
             const value = quasi.value.cooked ?? quasi.value.raw ?? '';
             return index < quasis.length - 1 ? `${value}__DYNAMIC_VALUE__` : value;
           }).join('');
-          const expressionOrigins = uniqueOrigins(expressions.flatMap((value) => valueOrigins(value)));
+          const expressionOrigins = uniqueOrigins(expressions
+            .flatMap((value) => valueOrigins(value))
+            .map((origin) => ({
+              ...origin,
+              route: {
+                hops: [
+                  ...origin.route.hops,
+                  urlHop(context, node, 'template-interpolation'),
+                ],
+              },
+            })));
           if (isXmlPayloadString(combined)) {
-            for (const origin of expressionOrigins) {
-              xmlPayloadValueOrigins.set(`${origin.fileId}:${origin.start}:${origin.end}`, origin);
-            }
+            recordValueOrigins(
+              xmlPayloadValueOrigins,
+              expressionOrigins.map((origin) => ({
+                ...origin,
+                route: {
+                  hops: [...origin.route.hops, urlHop(context, node, 'xml-payload')],
+                },
+              })),
+            );
           }
           return {
             type: 'primitive',
             value: staticString(node),
             origins: uniqueOrigins([
-              { fileId: context.file.file.id, start: node.start, end: node.end },
+              {
+                fileId: context.file.file.id,
+                start: node.start,
+                end: node.end,
+                route: { hops: [urlHop(context, node, 'literal')] },
+              },
               ...expressionOrigins,
             ]),
           };
@@ -978,18 +1195,33 @@ export function analyzeXapiFlow(
             context,
           );
         }
-        return mergeValues(
-          evaluateExpression(node.consequent as LocatedNode, { ...context, environment: context.environment.clone() }),
-          evaluateExpression(node.alternate as LocatedNode, { ...context, environment: context.environment.clone() }),
+        return transformUrlValue(
+          mergeValues(
+            evaluateExpression(node.consequent as LocatedNode, { ...context, environment: context.environment.clone() }),
+            evaluateExpression(node.alternate as LocatedNode, { ...context, environment: context.environment.clone() }),
+          ),
+          context,
+          node,
+          'conditional',
         );
       }
       case 'LogicalExpression':
-        return mergeValues(
-          evaluateExpression(node.left as LocatedNode, context),
-          evaluateExpression(node.right as LocatedNode, context),
+        return transformUrlValue(
+          mergeValues(
+            evaluateExpression(node.left as LocatedNode, context),
+            evaluateExpression(node.right as LocatedNode, context),
+          ),
+          context,
+          node,
+          'conditional',
         );
       case 'AssignmentExpression': {
-        const right = evaluateExpression(node.right as LocatedNode, context);
+        const right = transformUrlValue(
+          evaluateExpression(node.right as LocatedNode, context),
+          context,
+          node,
+          'assignment',
+        );
         const left = node.left as LocatedNode;
         if (left.type === 'Identifier') {
           const name = String(left.name);
@@ -1025,8 +1257,9 @@ export function analyzeXapiFlow(
         if (object.type === 'object' && property) {
           const member = resolvedValue(object.properties.get(property) ?? UNKNOWN);
           if (member.type === 'function') return { ...member, boundThis: object };
-          return member;
+          return transformUrlValue(member, context, node, 'property-access', property);
         }
+        if (!property) recordValueOrigins(opaqueValueOrigins, valueOrigins(object));
         return UNKNOWN;
       }
       case 'ObjectExpression': {
@@ -1039,9 +1272,25 @@ export function analyzeXapiFlow(
           if (property.type === 'SpreadElement') {
             const spread = resolvedValue(evaluateExpression(property.argument as LocatedNode, context));
             if (spread.type === 'object') {
-              for (const [name, value] of spread.properties) object.properties.set(name, value);
+              for (const [name, value] of spread.properties) {
+                object.properties.set(
+                  name,
+                  transformUrlValue(value, context, property, 'spread', name),
+                );
+              }
             } else if (spread.type === 'xapi') {
               addFrontier(spread, context, property, 'dynamic-transformation', []);
+            } else {
+              recordValueOrigins(
+                opaqueValueOrigins,
+                valueOrigins(transformUrlValue(
+                  spread,
+                  context,
+                  property,
+                  'opaque-boundary',
+                  'object spread',
+                )),
+              );
             }
             continue;
           }
@@ -1062,7 +1311,7 @@ export function analyzeXapiFlow(
             key,
             resolvedValue(rawValue).type === 'xapi'
               ? addRouteHop(resolvedValue(rawValue) as XapiValue, context.file, property, key, 'object-property')
-              : rawValue,
+              : transformUrlValue(rawValue, context, property, 'object-property', key),
           );
         }
         return object;
@@ -1070,11 +1319,32 @@ export function analyzeXapiFlow(
       case 'ArrayExpression': {
         const items: FlowValue[] = [];
         for (const element of node.elements as Array<LocatedNode | null>) {
+          if (element?.type === 'SpreadElement') {
+            const spread = resolvedValue(
+              evaluateExpression(element.argument as LocatedNode, context),
+            );
+            if (spread.type === 'array') {
+              items.push(...spread.items.map((item) =>
+                transformUrlValue(item, context, element, 'spread', 'array spread')));
+            } else {
+              recordValueOrigins(
+                opaqueValueOrigins,
+                valueOrigins(transformUrlValue(
+                  spread,
+                  context,
+                  element,
+                  'opaque-boundary',
+                  'array spread',
+                )),
+              );
+            }
+            continue;
+          }
           const value = element ? resolvedValue(evaluateExpression(element, context)) : NON_XAPI;
           if (element && value.type === 'xapi') {
             addFrontier(value, context, element, 'dynamic-transformation', []);
           }
-          items.push(value);
+          items.push(transformUrlValue(value, context, element ?? node, 'array-element'));
         }
         return { type: 'array', items };
       }
@@ -1097,13 +1367,13 @@ export function analyzeXapiFlow(
         ) {
           const argumentValues = evaluateArguments();
           const value = resolvedValue(argumentValues[0] ?? NON_XAPI);
-          return {
+          return transformUrlValue({
             type: 'primitive',
             value: value.type === 'primitive' && value.value !== undefined
               ? String(value.value)
               : undefined,
             origins: valueOrigins(value),
-          };
+          }, context, node, 'string-normalization', 'String');
         }
         if (
           calleeNode.type === 'MemberExpression'
@@ -1113,11 +1383,182 @@ export function analyzeXapiFlow(
           const receiver = resolvedValue(evaluateExpression(calleeNode.object as LocatedNode, context));
           evaluateArguments();
           if (receiver.type === 'primitive') {
-            return {
+            return transformUrlValue({
               type: 'primitive',
               value: undefined,
               origins: valueOrigins(receiver),
+            }, context, node, 'string-normalization', memberStaticName(calleeNode));
+          }
+        }
+        if (
+          calleeNode.type === 'MemberExpression'
+          && (calleeNode.object as LocatedNode).type === 'Identifier'
+          && (calleeNode.object as LocatedNode).name === 'JSON'
+          && ['stringify', 'parse'].includes(memberStaticName(calleeNode) ?? '')
+        ) {
+          const argumentValues = evaluateArguments();
+          const value = resolvedValue(argumentValues[0] ?? NON_XAPI);
+          const operation = memberStaticName(calleeNode) === 'parse'
+            ? 'json-parse'
+            : 'json-stringify';
+          if (
+            operation === 'json-parse'
+            && value.type === 'primitive'
+            && value.structured
+          ) {
+            return transformUrlValue(
+              value.structured,
+              context,
+              node,
+              'json-parse',
+              'JSON.parse',
+            );
+          }
+          return transformUrlValue({
+            type: 'primitive',
+            value: undefined,
+            origins: valueOrigins(value),
+            ...(operation === 'json-stringify' ? { structured: value } : {}),
+          }, context, node, operation, `JSON.${memberStaticName(calleeNode)}`);
+        }
+        if (calleeNode.type === 'MemberExpression') {
+          const method = memberStaticName(calleeNode);
+          const receiver = resolvedValue(evaluateExpression(calleeNode.object as LocatedNode, context));
+          if (receiver.type === 'array' && method) {
+            const argumentValues = evaluateArguments();
+            const callback = resolvedValue(argumentValues[0] ?? UNKNOWN);
+            const callbackTransformation: UrlProvenanceTransformation =
+              method === 'map'
+                ? 'array-map'
+                : method === 'flatMap'
+                  ? 'array-flat-map'
+                  : method === 'filter'
+                    ? 'array-filter'
+                    : method === 'find' || method === 'findLast'
+                      ? 'array-find'
+                      : method === 'forEach'
+                        ? 'array-for-each'
+                        : 'opaque-boundary';
+            const callForItems = (): FlowValue[] => {
+              if (callback.type !== 'function') {
+                recordValueOrigins(
+                  opaqueValueOrigins,
+                  valueOrigins(transformUrlValue(receiver, context, node, 'opaque-boundary', method)),
+                );
+                return [];
+              }
+              return receiver.items.map((item) =>
+                callFunction(
+                  callback,
+                  [
+                    transformUrlValue(
+                      item,
+                      context,
+                      node,
+                      callbackTransformation,
+                      method,
+                    ),
+                    NON_XAPI,
+                    receiver,
+                  ],
+                  context,
+                  'method-argument-to-parameter',
+                ));
             };
+            if (method === 'map' || method === 'flatMap') {
+              const mapped = callForItems();
+              if (callback.type !== 'function') return UNKNOWN;
+              const items = method === 'flatMap'
+                ? mapped.flatMap((value) => {
+                    const resolved = resolvedValue(value);
+                    return resolved.type === 'array' ? resolved.items : [resolved];
+                  })
+                : mapped;
+              return transformUrlValue(
+                { type: 'array', items },
+                context,
+                node,
+                method === 'map' ? 'array-map' : 'array-flat-map',
+                method,
+              );
+            }
+            if (method === 'filter' || method === 'find' || method === 'findLast' || method === 'forEach') {
+              callForItems();
+              if (callback.type !== 'function') return UNKNOWN;
+              if (method === 'forEach') return NON_XAPI;
+              if (method === 'find' || method === 'findLast') {
+                const found = receiver.items.reduce<FlowValue>(
+                  (combined, item) => combined === UNKNOWN
+                    ? item
+                    : mergeValues(combined, item),
+                  UNKNOWN,
+                );
+                return transformUrlValue(
+                  found,
+                  context,
+                  node,
+                  'array-find',
+                  method,
+                );
+              }
+              return transformUrlValue(receiver, context, node, 'array-filter', method);
+            }
+            if (method === 'flat') {
+              const items = receiver.items.flatMap((item) => {
+                const resolved = resolvedValue(item);
+                return resolved.type === 'array' ? resolved.items : [resolved];
+              });
+              return transformUrlValue(
+                { type: 'array', items },
+                context,
+                node,
+                'array-flat',
+                method,
+              );
+            }
+            if (method === 'slice') {
+              return transformUrlValue(receiver, context, node, 'array-slice', method);
+            }
+            if (method === 'concat') {
+              const items = [
+                ...receiver.items,
+                ...argumentValues.flatMap((argument) => {
+                  const resolved = resolvedValue(argument);
+                  return resolved.type === 'array' ? resolved.items : [resolved];
+                }),
+              ];
+              return transformUrlValue(
+                { type: 'array', items },
+                context,
+                node,
+                'array-concat',
+                method,
+              );
+            }
+            if (method === 'join') {
+              return transformUrlValue({
+                type: 'primitive',
+                value: undefined,
+                origins: valueOrigins(receiver),
+              }, context, node, 'array-join', method);
+            }
+            recordValueOrigins(
+              opaqueValueOrigins,
+              valueOrigins(transformUrlValue(receiver, context, node, 'opaque-boundary', method)),
+            );
+            return UNKNOWN;
+          }
+          if (
+            (calleeNode.object as LocatedNode).type === 'Identifier'
+            && (calleeNode.object as LocatedNode).name === 'console'
+          ) {
+            const argumentValues = evaluateArguments();
+            recordValueOrigins(
+              loggingValueOrigins,
+              argumentValues.flatMap((value) =>
+                valueOrigins(transformUrlValue(value, context, node, 'terminal', `console.${method ?? 'log'}`))),
+            );
+            return NON_XAPI;
           }
         }
         const callee = resolvedValue(evaluateExpression(calleeNode, context));
@@ -1142,6 +1583,17 @@ export function analyzeXapiFlow(
         for (const argument of argumentValues.map((value) => resolvedValue(value))) {
           if (argument.type === 'xapi') addFrontier(argument, context, node, 'opaque-call', []);
         }
+        const opaqueInputs = [
+          ...argumentValues,
+          ...(calleeNode.type === 'MemberExpression'
+            ? [evaluateExpression(calleeNode.object as LocatedNode, context)]
+            : []),
+        ];
+        recordValueOrigins(
+          opaqueValueOrigins,
+          opaqueInputs.flatMap((value) =>
+            valueOrigins(transformUrlValue(value, context, node, 'opaque-boundary', firstBindingName(calleeNode)))),
+        );
         return UNKNOWN;
       }
       case 'NewExpression': {
@@ -1195,12 +1647,28 @@ export function analyzeXapiFlow(
         for (const argument of argumentsList.map((value) => resolvedValue(value))) {
           if (argument.type === 'xapi') addFrontier(argument, context, node, 'opaque-call', []);
         }
+        recordValueOrigins(
+          opaqueValueOrigins,
+          argumentsList.flatMap((value) =>
+            valueOrigins(transformUrlValue(value, context, node, 'opaque-boundary', 'constructor'))),
+        );
         return UNKNOWN;
       }
       case 'UnaryExpression':
-      case 'BinaryExpression':
         for (const child of childNodes(node)) evaluateExpression(child, context);
         return NON_XAPI;
+      case 'BinaryExpression': {
+        const left = evaluateExpression(node.left as LocatedNode, context);
+        const right = evaluateExpression(node.right as LocatedNode, context);
+        if (node.operator === '+') {
+          return transformUrlValue({
+            type: 'primitive',
+            value: undefined,
+            origins: uniqueOrigins([...valueOrigins(left), ...valueOrigins(right)]),
+          }, context, node, 'string-concatenation', '+');
+        }
+        return NON_XAPI;
+      }
       default:
         for (const child of childNodes(node)) evaluateExpression(child, context);
         return NON_XAPI;
@@ -1266,7 +1734,7 @@ export function analyzeXapiFlow(
         const returned = resolvedValue(evaluateExpression(body, context));
         return returned.type === 'xapi'
           ? addRouteHop(returned, callable.file, body, callable.name, 'return')
-          : returned;
+          : transformUrlValue(returned, context, body, 'return', callable.name);
       }
       return evaluateStatements(body.body as LocatedNode[], context).returned ?? NON_XAPI;
     } finally {
@@ -1310,7 +1778,7 @@ export function analyzeXapiFlow(
         return {
           returned: returned.type === 'xapi' && node.argument
             ? addRouteHop(returned, context.file, node.argument as LocatedNode, '<return>', 'return')
-            : returned,
+            : transformUrlValue(returned, context, node, 'return', '<return>'),
         };
       }
       case 'ThrowStatement':
@@ -1683,6 +2151,38 @@ export function analyzeXapiFlow(
 
   for (const file of parsedFiles) evaluateModule(file);
 
+  // An exported URL value with no supplied importing macro escapes the fully
+  // evaluated Macro Set. Its eventual consumer is outside the analyzer's
+  // boundary, so it cannot support a negative-use proof.
+  for (const runtime of modules.values()) {
+    if (suppliedConsumerFileIds.has(runtime.file.file.id)) continue;
+    const context: EvalContext = {
+      file: runtime.file,
+      environment: runtime.environment,
+      module: runtime,
+      callDepth: 0,
+    };
+    for (const [exportName, value] of runtime.exports) {
+      const exported = transformUrlValue(
+        value,
+        context,
+        runtime.file.program,
+        'export',
+        exportName,
+      );
+      recordValueOrigins(
+        opaqueValueOrigins,
+        valueOrigins(transformUrlValue(
+          exported,
+          context,
+          runtime.file.program,
+          'opaque-boundary',
+          'unsupplied export consumer',
+        )),
+      );
+    }
+  }
+
   // Analyze each function once with unknown parameters. This finds direct uses
   // of captured xAPI roots in callbacks and uncalled helpers, while parameter
   // flows remain call-site-specific because UNKNOWN never seeds xAPI.
@@ -1740,5 +2240,8 @@ export function analyzeXapiFlow(
     touchpoints: [...touchpoints.values()],
     argumentUses: [...argumentUses.values()],
     xmlPayloadValueOrigins: [...xmlPayloadValueOrigins.values()],
+    readValueOrigins: [...readValueOrigins.values()],
+    loggingValueOrigins: [...loggingValueOrigins.values()],
+    opaqueValueOrigins: [...opaqueValueOrigins.values()],
   };
 }

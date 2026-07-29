@@ -1,6 +1,6 @@
 {
   "name": "cisco-macro-analytics",
-  "version": "0.3.1-beta",
+  "version": "0.6.5-beta",
   "private": true,
   "type": "module",
   "scripts": {
@@ -20,6 +20,7 @@
     "acorn": "8.17.0",
     "acorn-walk": "8.3.5",
     "ajv": "8.20.0",
+    "fflate": "0.8.3",
     "jsxapi": "6.0.0"
   },
   "devDependencies": {

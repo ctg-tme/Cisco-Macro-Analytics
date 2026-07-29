@@ -6,7 +6,9 @@ Finding cards will not render a separate Source locations field. Each distinct s
 
 Authentication-related review remains a vocabulary match rather than a secret detector. Its Finding states that submitted phrases matched the versioned Credential Vocabulary, lists the exact matched phrases, and shows the unmasked local source when the author expands a code preview. This local context is required to find and assess the object being discussed. Analysis Report exports continue to omit source excerpts and adjacent literal values.
 
-Unresolved Identifier remains a neutral Analysis Observation but no longer produces a Finding or attaches to an xAPI Flow Frontier. Its uncertainty is too broad to justify adding troubleshooting work without runtime or environment evidence. Repeated xAPI Reference becomes Advisory because consolidation may reduce maintenance.
+ADR 0014 refines this presentation so authentication review shows one source location at a time instead of rendering every source-preview control together.
+
+Unresolved Identifier remains a neutral Analysis Observation but no longer produces a Finding or attaches to a Dynamic xAPI Reference. Its uncertainty is too broad to justify adding troubleshooting work without runtime or environment evidence. Repeated xAPI Reference becomes Advisory because consolidation may reduce maintenance.
 
 Cross-macro overlap is split using connected components of the supplied local dependency graph. The same Canonical xAPI Reference appearing in files connected directly or transitively produces a Linked Macro xAPI Overlap Advisory so authors can consider shared ownership or a wrapper. The same reference appearing across disconnected components produces a Separate Macro xAPI Overlap Informational Finding so independent behaviors can be coordinated without suggesting shared implementation. A reference spanning both situations may produce both Findings because the decisions differ.
 

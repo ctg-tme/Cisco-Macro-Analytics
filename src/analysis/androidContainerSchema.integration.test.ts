@@ -57,7 +57,7 @@ describe('Android Container schema capability', () => {
     if (result.kind !== 'report') return;
     expect(result.report.provenance.analyzer).toEqual({
       name: 'Cisco Macro Analyzer',
-      version: '2.2.1',
+      version: '2.3.0',
     });
     expect(result.report.inventory.references[0]).toEqual(expect.objectContaining({
       availability: 'unavailable-for-mode',

@@ -10,7 +10,7 @@ import {
 } from './internal/sourceFacts';
 import {
   analyzeXapiFlow,
-  type XapiArgumentUse,
+  type FlowValueOrigin,
 } from './internal/xapiFlow';
 import { resolveEffectiveRulePack } from './rulePack';
 import type {
@@ -22,9 +22,11 @@ import type {
   ApiKind,
   ApiReference,
   CanonicalXapiReference,
+  CommentedUrlObservation,
   DirectDependencyEdge,
+  DynamicUrlObservation,
   EffectiveRulePack,
-  ExternalDomainObservation,
+  ExternalDependencyObservation,
   FileInventoryEntry,
   FileObservationCoverage,
   Finding,
@@ -38,16 +40,18 @@ import type {
   RuleApplicability,
   SourceRange,
   UnresolvedDependencyEdge,
+  UrlProvenanceRoute,
+  UrlUsageExplanation,
   XapiFlowFrontierObservation,
   XapiTouchpointObservation,
 } from './types';
 
-const ANALYZER_VERSION = '2.2.1';
+const ANALYZER_VERSION = '2.3.0';
 const PARSER_VERSION = '8.17.0';
 const BUILT_IN_RULE_VERSION = '2.0.0';
 const OBSERVATION_FAMILIES: ObservationFamily[] = [
   'imports',
-  'external-domains',
+  'external-destinations',
   'parser-diagnostics',
   'module-syntax',
   'lexical-scope',
@@ -473,14 +477,14 @@ function observationCoverage(
           };
         }
         if (
-          family === 'external-domains'
+          family === 'external-destinations'
           && result?.kind === 'parsed'
           && result.parsed.dynamicExternalUrls.length > 0
         ) {
           return {
             family,
             state: 'Partial' as const,
-            reason: 'At least one network URL determines its domain at runtime.',
+            reason: 'At least one URL determines its external destination at runtime.',
           };
         }
         if ((family === 'xapi-bindings' || family === 'xapi-touchpoints') && frontierFileIds.has(file.id)) {
@@ -496,18 +500,45 @@ function observationCoverage(
   });
 }
 
-function isXapiArgumentValue(
+function matchingOrigins(
   fileId: string,
   node: { start: number; end: number },
-  argumentUses: XapiArgumentUse[],
-): boolean {
-  return argumentUses.some((use) =>
-    (
-      use.fileId === fileId
-      && use.argumentRanges.some((range) => node.start >= range.start && node.end <= range.end)
-    )
-    || use.valueOrigins.some((origin) =>
-      origin.fileId === fileId && origin.start === node.start && origin.end === node.end));
+  origins: FlowValueOrigin[],
+): FlowValueOrigin[] {
+  return origins.filter((origin) =>
+    origin.fileId === fileId
+    && origin.start === node.start
+    && origin.end === node.end);
+}
+
+function uniqueUrlRoutes(origins: FlowValueOrigin[]): UrlProvenanceRoute[] {
+  return [...new Map(origins.map((origin) => [
+    origin.route.hops.map((hop) => [
+      hop.transformation,
+      hop.sourceReference.fileId,
+      hop.sourceReference.range.start.line,
+      hop.sourceReference.range.start.column,
+      hop.label ?? '',
+    ].join(':')).join('>'),
+    origin.route,
+  ])).values()];
+}
+
+function explanation(
+  reason: UrlUsageExplanation['reason'],
+  summary: string,
+  routes: UrlProvenanceRoute[],
+  fallbackSourceReference: ExternalDependencyObservation['sourceReference'],
+): UrlUsageExplanation {
+  const lastSourceReference = routes
+    .flatMap((route) => route.hops.at(-1)?.sourceReference ?? [])
+    .at(-1) ?? fallbackSourceReference;
+  return {
+    reason,
+    summary,
+    lastSourceReference,
+    ...(routes.length > 0 ? { provenanceRoutes: routes } : {}),
+  };
 }
 
 function apiReferences(
@@ -667,32 +698,180 @@ export function analyzeMacroSet(input: AnalysisInput): AnalysisOutcome {
     if (!parsed) continue;
     const hash = contentHashes.get(file.id) ?? '';
     for (const externalUrl of parsed.externalUrls) {
-      const xapiParameter = isXapiArgumentValue(file.id, externalUrl.node, flow.argumentUses);
-      const xmlPayload = externalUrl.xmlPayload || flow.xmlPayloadValueOrigins.some((origin) =>
-        origin.fileId === file.id
-        && origin.start === externalUrl.node.start
-        && origin.end === externalUrl.node.end);
-      const usage: ExternalDomainObservation['usage'] =
-        xapiParameter && xmlPayload
-          ? 'xapi-parameter-and-xml-payload'
-          : xapiParameter
-            ? 'xapi-parameter'
-            : xmlPayload
-              ? 'xml-payload'
-              : 'not-in-use';
-      const observation: ExternalDomainObservation = {
+      const occurrenceSourceReference = sourceReference(file, hash, externalUrl.range);
+      const argumentOrigins = matchingOrigins(
+        file.id,
+        externalUrl.node,
+        flow.argumentUses.flatMap((use) => use.valueOrigins),
+      );
+      const xmlOrigins = matchingOrigins(file.id, externalUrl.node, flow.xmlPayloadValueOrigins);
+      const opaqueOrigins = matchingOrigins(file.id, externalUrl.node, flow.opaqueValueOrigins);
+      const readOrigins = matchingOrigins(file.id, externalUrl.node, flow.readValueOrigins);
+      const loggingOrigins = matchingOrigins(file.id, externalUrl.node, flow.loggingValueOrigins);
+      const xmlPayload = externalUrl.xmlPayload || xmlOrigins.length > 0;
+      const directXmlRoute: UrlProvenanceRoute = {
+        hops: [
+          {
+            transformation: 'literal',
+            sourceReference: occurrenceSourceReference,
+          },
+          {
+            transformation: 'xml-payload',
+            sourceReference: occurrenceSourceReference,
+          },
+        ],
+      };
+      const routes = uniqueUrlRoutes([
+        ...argumentOrigins,
+        ...xmlOrigins,
+        ...opaqueOrigins,
+        ...readOrigins,
+        ...loggingOrigins,
+      ]);
+      if (xmlPayload && xmlOrigins.length === 0) routes.push(directXmlRoute);
+
+      let usage: ExternalDependencyObservation['usage'];
+      let usageExplanation: UrlUsageExplanation;
+      if (argumentOrigins.length > 0 && xmlPayload) {
+        usage = 'in-use';
+        usageExplanation = explanation(
+          'xapi-argument-and-xml-payload',
+          'The URL is structurally present in XML and at least one supported source path reaches an argument of a proven xAPI touchpoint.',
+          routes,
+          occurrenceSourceReference,
+        );
+      } else if (argumentOrigins.length > 0) {
+        usage = 'in-use';
+        usageExplanation = explanation(
+          'xapi-argument',
+          'At least one supported source path reaches an argument of a proven xAPI touchpoint.',
+          routes,
+          occurrenceSourceReference,
+        );
+      } else if (xmlPayload) {
+        usage = 'in-use';
+        usageExplanation = explanation(
+          'xml-payload',
+          'The URL is structurally present in executable XML, which is treated as xAPI-bound in the RoomOS Macro runtime.',
+          routes,
+          occurrenceSourceReference,
+        );
+      } else if (opaqueOrigins.length > 0) {
+        usage = 'use-unknown';
+        usageExplanation = explanation(
+          'opaque-flow',
+          'A source path reaches an unsupported call, transformation, mutation, or external boundary before xAPI use can be proved or disproved.',
+          routes,
+          occurrenceSourceReference,
+        );
+      } else if (readOrigins.length === 0) {
+        usage = 'not-in-use';
+        usageExplanation = explanation(
+          'never-read',
+          'The URL value is assigned or constructed but no supported source path reads it.',
+          routes,
+          occurrenceSourceReference,
+        );
+      } else if (loggingOrigins.length > 0) {
+        usage = 'not-in-use';
+        usageExplanation = explanation(
+          'logging-only',
+          'The URL reaches console logging, and no supported path reaches xAPI.',
+          routes,
+          occurrenceSourceReference,
+        );
+      } else {
+        usage = 'not-in-use';
+        usageExplanation = explanation(
+          'discarded',
+          'The URL is read, but every supported path terminates without reaching xAPI.',
+          routes,
+          occurrenceSourceReference,
+        );
+      }
+
+      const observation: ExternalDependencyObservation = {
         id: observationIdentity(
-          'external-domain',
+          'external-dependency',
           file,
           externalUrl.range,
-          `${externalUrl.domain}:${externalUrl.protocol}:${externalUrl.node.start}:${usage}`,
+          `${externalUrl.destination}:${externalUrl.protocol}:${externalUrl.node.start}:${usage}`,
         ),
-        family: 'external-domains',
-        kind: 'external-domain',
-        domain: externalUrl.domain,
+        family: 'external-destinations',
+        kind: 'external-dependency',
+        destination: externalUrl.destination,
         protocol: externalUrl.protocol,
         usage,
-        sourceReference: sourceReference(file, hash, externalUrl.range),
+        usageExplanation,
+        sourceReference: occurrenceSourceReference,
+      };
+      observations.push(observation);
+    }
+    for (const commentedUrl of parsed.commentedUrls) {
+      const occurrenceSourceReference = sourceReference(file, hash, commentedUrl.range);
+      const observation: CommentedUrlObservation = {
+        id: observationIdentity(
+          'commented-url',
+          file,
+          commentedUrl.range,
+          `${commentedUrl.destination}:${commentedUrl.protocol}`,
+        ),
+        family: 'external-destinations',
+        kind: 'commented-url',
+        destination: commentedUrl.destination,
+        protocol: commentedUrl.protocol,
+        usage: 'not-in-use',
+        usageExplanation: explanation(
+          'commented',
+          'The URL occurs only in a JavaScript comment. It is evidence, not an External Dependency, and is hidden from the map by default.',
+          [],
+          occurrenceSourceReference,
+        ),
+        sourceReference: occurrenceSourceReference,
+      };
+      observations.push(observation);
+    }
+    for (const dynamicUrl of parsed.dynamicExternalUrls) {
+      const occurrenceSourceReference = sourceReference(file, hash, dynamicUrl.range);
+      const usage: DynamicUrlObservation['usage'] = dynamicUrl.xmlPayload
+        ? 'in-use'
+        : 'use-unknown';
+      const usageExplanation = dynamicUrl.xmlPayload
+        ? explanation(
+            'xml-payload',
+            'The dynamically addressed URL is structurally present in executable XML, so its use is proven even though its External Destination cannot be reconstructed.',
+            [{
+              hops: [
+                { transformation: 'literal', sourceReference: occurrenceSourceReference },
+                { transformation: 'xml-payload', sourceReference: occurrenceSourceReference },
+              ],
+            }],
+            occurrenceSourceReference,
+          )
+        : explanation(
+            'dynamic-destination',
+            'The URL contains a runtime-computed host, so no External Destination can be reconstructed and downstream use remains unknown.',
+            [{
+              hops: [
+                { transformation: 'literal', sourceReference: occurrenceSourceReference },
+                { transformation: 'opaque-boundary', sourceReference: occurrenceSourceReference },
+              ],
+            }],
+            occurrenceSourceReference,
+          );
+      const observation: DynamicUrlObservation = {
+        id: observationIdentity(
+          'dynamic-url',
+          file,
+          dynamicUrl.range,
+          `${dynamicUrl.protocol ?? 'unknown'}:${dynamicUrl.node.start}:${usage}`,
+        ),
+        family: 'external-destinations',
+        kind: 'dynamic-url',
+        ...(dynamicUrl.protocol ? { protocol: dynamicUrl.protocol } : {}),
+        usage,
+        usageExplanation,
+        sourceReference: occurrenceSourceReference,
       };
       observations.push(observation);
     }
@@ -845,16 +1024,16 @@ export function analyzeMacroSet(input: AnalysisInput): AnalysisOutcome {
     if (fileFrontiers.length > 0) {
       findings.push(buildFinding({
         code: 'coverage.xapi-flow-frontier',
-        title: 'xAPI Flow Frontier',
-        summary: 'One or more seeded xAPI routes enter a dynamic, opaque, unavailable, or mixed transformation.',
+        title: 'Dynamic xAPI Reference',
+        summary: 'The complete xAPI path depends on content supplied at runtime, so the analyzer cannot verify the full reference.',
         category: 'Coverage',
         evidence: 'unknown',
-        priority: 'warning',
+        priority: 'advisory',
         applicability: 'target-independent',
         observationIds: fileFrontiers.map((frontier) => frontier.id),
-        technicalBasis: 'Seeded xAPI Data Flow stops at the last statically proven hop and does not attribute returned or downstream values beyond that boundary.',
-        limitations: ['Every independently proven route remains analyzed. A frontier describes analysis coverage and does not claim the macro fails.'],
-        recommendedAction: 'Review each recorded frontier route and replace opaque transformations with statically provable bindings when complete coverage is needed.',
+        technicalBasis: 'Seeded xAPI Data Flow stops at the last statically proven hop when a runtime value, opaque transformation, or mixed binding prevents complete canonical path reconstruction.',
+        limitations: ['Every independently proven route remains analyzed. A dynamic reference may be intentional and correct; this Advisory identifies source the analyzer cannot fully verify and does not claim the macro fails.'],
+        recommendedAction: 'Review and test the content injected into each xAPI reference on the target device before release. If an error occurs, verify the constructed path first.',
       }, observationsById, graph.entriesByFileId, input.rulePack.version));
     }
 
@@ -1112,10 +1291,10 @@ export function analyzeMacroSet(input: AnalysisInput): AnalysisOutcome {
     || flow.frontiers.length > 0;
 
   const reportWithoutId: Omit<AnalysisReport, 'reportId'> = {
-    schemaVersion: '2.2.0',
+    schemaVersion: '2.3.0',
     generatedAt: input.analysisTime,
     provenance: {
-      reportSchema: { id: 'analysis-report', version: '2.2.0' },
+      reportSchema: { id: 'analysis-report', version: '2.3.0' },
       analyzer: { name: 'Cisco Macro Analyzer', version: ANALYZER_VERSION },
       parser: { name: 'Acorn', version: PARSER_VERSION },
       rulePack: { id: effectiveRulePack.id, version: effectiveRulePack.version },

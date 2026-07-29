@@ -11,6 +11,34 @@ function functionSource(name: string, nextName: string): string {
 }
 
 describe('Connect Endpoint flow', () => {
+  it('presents local upload and endpoint retrieval as adjacent macro-source choices', () => {
+    const uploadSection = html.slice(
+      html.indexOf('aria-labelledby="upload-title"'),
+      html.indexOf('aria-labelledby="scope-title"'),
+    );
+    const topActions = html.slice(
+      html.indexOf('<nav class="top-actions"'),
+      html.indexOf('</nav>'),
+    );
+
+    expect(uploadSection).toContain('id="endpoint-button"');
+    expect(uploadSection).toContain('Choose one source for the macro set.');
+    expect(uploadSection).toContain('Upload from this computer');
+    expect(uploadSection).toContain('id="source-divider"');
+    expect(uploadSection).toContain('Connect to a RoomOS endpoint');
+    expect(uploadSection).toContain('Other options');
+    expect(uploadSection.indexOf('id="drop-zone"')).toBeLessThan(
+      uploadSection.indexOf('id="source-divider"'),
+    );
+    expect(uploadSection.indexOf('id="source-divider"')).toBeLessThan(
+      uploadSection.indexOf('id="endpoint-source"'),
+    );
+    expect(uploadSection.indexOf('id="endpoint-source"')).toBeLessThan(
+      uploadSection.indexOf('id="manual-source-actions"'),
+    );
+    expect(topActions).not.toContain('id="endpoint-button"');
+  });
+
   it('collects only the required connection fields in a modal', () => {
     expect(html).toContain('id="endpoint-button"');
     expect(html).toContain('id="endpoint-dialog"');
@@ -25,6 +53,7 @@ describe('Connect Endpoint flow', () => {
     expect(main).toContain('state.files = endpointMacroSelections(macros)');
     expect(main).toContain('elements.fileInput.disabled = connected');
     expect(main).toContain('elements.dropZone.hidden = connected');
+    expect(main).toContain('elements.sourceDivider.hidden = connected');
     expect(main).toContain('elements.manualSourceActions.hidden = connected');
     expect(main).toContain('if (state.endpoint) return;');
     expect(main).toContain('endpoint.xapi.close()');
@@ -81,7 +110,7 @@ describe('Connect Endpoint flow', () => {
     expect(html).toMatch(/connect-src 'self' [^"]*https:\/\/us\.aptabase\.com [^"]*https:\/\/eu\.aptabase\.com [^"]*wss:/);
     expect(html).toContain('Endpoint source remains in browser memory only.');
     expect(html).toContain('Usernames and passwords are never saved');
-    expect(html).toContain('JSON exports omit the original source text.');
+    expect(html).toContain('The JSON files inside ZIP exports omit the original source text.');
     expect(main).not.toContain('localStorage');
     expect(main).not.toContain('sessionStorage');
   });

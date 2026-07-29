@@ -3,7 +3,26 @@ import { describe, expect, it } from 'vitest';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const main = readFileSync(new URL('./main.ts', import.meta.url), 'utf8');
+const exportClient = readFileSync(
+  new URL('./export/analysisExportClient.ts', import.meta.url),
+  'utf8',
+);
+const exportWorker = readFileSync(
+  new URL('./export/analysisExport.worker.ts', import.meta.url),
+  'utf8',
+);
+const importClient = readFileSync(
+  new URL('./analysis/analysisSessionImportClient.ts', import.meta.url),
+  'utf8',
+);
+const importWorker = readFileSync(
+  new URL('./analysis/analysisSessionImport.worker.ts', import.meta.url),
+  'utf8',
+);
 const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+const publicFavicon = readFileSync(new URL('../public/favicon.svg', import.meta.url), 'utf8');
+const localFavicon = readFileSync(new URL('../public/favicon-local.svg', import.meta.url), 'utf8');
+const viteConfig = readFileSync(new URL('../vite.config.ts', import.meta.url), 'utf8');
 const manifest = JSON.parse(
   readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'),
 ) as { Version: string };
@@ -17,7 +36,7 @@ const packageLockMetadata = JSON.parse(
 describe('Cisco Macro Analyzer product shell', () => {
   it('keeps the original task and identity obvious', () => {
     expect(html).toContain('<title>Cisco Macro Analyzer</title>');
-    expect(html).toContain('Upload macro files');
+    expect(html).toContain('Add macro files');
     expect(html).toContain('Exploratory Analysis across validated RoomOS versions');
     expect(html).toContain('Analyze macro');
     expect(html.indexOf('Upload macro files')).toBeLessThan(
@@ -34,9 +53,33 @@ describe('Cisco Macro Analyzer product shell', () => {
     );
   });
 
+  it('uses the beta-banner yellow favicon only when served locally', () => {
+    expect(html).toContain('<link rel="icon" href="/favicon.svg" type="image/svg+xml" />');
+    expect(publicFavicon).toContain('fill="#65d2ff"');
+    expect(localFavicon).toContain('fill="#f9b817"');
+    expect(css).toMatch(/\.beta-banner \{[^}]*background: #f9b817;/s);
+    expect(viteConfig).toContain("command === 'serve'");
+    expect(viteConfig).toContain('html.replace(publicFavicon, localFavicon)');
+  });
+
+  it('makes the dependency example available only in local development', () => {
+    expect(html).toMatch(/id="demo-button"[^>]*hidden/);
+    expect(main).toContain('if (import.meta.env.DEV) {');
+    expect(main).toContain('elements.demoButton.hidden = false;');
+    expect(main).toContain(
+      "elements.demoButton.addEventListener('click', () => void loadExample());",
+    );
+    expect(main).toContain(
+      "await import('./examples/dependencyMapExample')",
+    );
+    expect(main).not.toContain(
+      "from './examples/dependencyMapExample'",
+    );
+  });
+
   it('shows the beta release and current copyright in the product shell', () => {
-    expect(manifest.Version).toBe('0.3.1-BETA');
-    expect(packageMetadata.version).toBe('0.3.1-beta');
+    expect(manifest.Version).toBe('0.6.5-BETA');
+    expect(packageMetadata.version).toBe('0.6.5-beta');
     expect(packageMetadata.version).toBe(manifest.Version.toLowerCase());
     expect(packageLockMetadata.version).toBe(packageMetadata.version);
     expect(packageLockMetadata.packages[''].version).toBe(packageMetadata.version);
@@ -103,7 +146,7 @@ describe('Cisco Macro Analyzer product shell', () => {
     expect(html).toContain('>General Issues<');
     expect(html).toContain('>Android Issues<');
     expect(html).toContain('>xAPI References<');
-    expect(html).toContain('>Raw JSON<');
+    expect(html).not.toContain('>Raw JSON<');
     expect(html).not.toContain('Inspect the code.');
     expect(html).not.toContain('Keep the uncertainty.');
     expect(html).not.toContain('Claim mode');
@@ -128,12 +171,40 @@ describe('Cisco Macro Analyzer product shell', () => {
   });
 
   it('keeps Android Container schema availability compact in the overview and its detail in the issues tab', () => {
-    expect(main).toContain("summaryCard(\n      'Android Container schema availability'");
+    expect(main).toContain("summaryCard(\n      'Android Container'");
+    expect(main).toContain('`${readiness.available} of ${readiness.total} Available`');
     expect(html).not.toContain('class="result-card android-readiness-card"');
     expect(html.indexOf('id="tab-android-container"')).toBeLessThan(
       html.indexOf('id="android-container-readiness-detail"'),
     );
     expect(main).toContain('elements.androidContainerReadinessDetail.innerHTML');
+  });
+
+  it('summarizes every macro independently in an initially collapsed Overview tile', () => {
+    expect(html).toContain('id="macro-overview-list"');
+    expect(html).not.toContain('id="summary-grid"');
+    expect(main).toContain('report.fileInventory.map((file, index)');
+    expect(main).not.toContain("index === 0 ? ' open' : ''");
+    expect(main).toContain('reference.source.fileId === file.fileId');
+    expect(main).toContain('finding.sourceFileIds.includes(file.fileId)');
+    expect(main).toContain('schemaCoverageForMacro(session, file.fileId)');
+    expect(main).toContain('summarizeSubscriptions(references)');
+    expect(main).toContain('data-overview-macro=');
+    expect(main).toContain('class="macro-overview-toggle"');
+    expect(css).toContain('.macro-overview-toggle { width: 27px; height: 27px;');
+    expect(css).toContain('.macro-overview-toggle::before { content: "→"; }');
+    expect(css).toContain('.macro-overview-section[open] .macro-overview-toggle::before { content: "↓"; }');
+    expect(css).toContain('border: 1px solid var(--border)');
+    expect(css).toContain('.macro-overview-section:not([open]) > .macro-overview-content { display: none; }');
+    expect(css).toContain('.macro-overview-content');
+    expect(main).not.toContain("summaryCard('Unique xAPI paths'");
+    expect(main).toContain("'Subscriptions'");
+    expect(main).toContain("'Schema Range'");
+    expect(main).toContain("summaryCard('General Issues'");
+    expect(main).not.toContain('Latest software · derived from xAPI presence');
+    expect(css).toContain('grid-template-columns: repeat(5, minmax(0, 1fr))');
+    expect(css).toContain('.summary-card { min-height: 76px');
+    expect(css).toContain('.macro-overview-section > summary { display: block; padding: 11px 13px');
   });
 
   it('separates Cloud and On-premises version pills into two columns', () => {
@@ -163,12 +234,30 @@ describe('Cisco Macro Analyzer product shell', () => {
   });
 
   it('keeps local source previews collapsed in both issue views', () => {
-    expect(main).toContain('snippetSources.map((reference) => renderSourceSnippet(reference))');
+    expect(main).toContain('renderFindingSourceEvidence(finding, snippetSources, sourceReviews)');
     expect(main).toContain('referenceGroup.references.map(renderSourceOccurrence)');
     expect(main).toContain('<details class="source-snippet">');
     expect(main).not.toContain('<details class="source-snippet" open>');
     expect(main).not.toContain('maskSensitiveSourceLine');
     expect(css).toContain('.source-code-line.highlighted');
+  });
+
+  it('keeps authentication vocabulary review compact with a dismissible source queue', () => {
+    expect(main).toContain('function renderCredentialSourceReview(');
+    expect(main).toContain('function bindCredentialSourceReviewControls(');
+    expect(main).toContain("finding.code === 'source.sensitive-credential-indicator'");
+    expect(main).toContain('<strong>${sourceCount} source locations</strong> combine');
+    expect(main).toContain('data-source-review-dismiss');
+    expect(main).toContain('data-source-review-restore');
+    expect(main).toContain('data-source-review-direction="previous"');
+    expect(main).toContain('data-source-review-direction="next"');
+    expect(main).toContain('sourceReviews.set(finding.id, sourceReferences)');
+    expect(main).toContain('state.dismissedCredentialLocations');
+    expect(main).toContain('Dismissal affects only this local review');
+    expect(main).toContain('The canonical Finding and exported report are unchanged');
+    expect(css).toContain('.credential-source-review');
+    expect(css).toContain('.source-review-controls');
+    expect(css).toContain('.source-review-empty');
   });
 
   it('renders actionable Finding evidence without duplicating Source locations', () => {
@@ -219,26 +308,57 @@ describe('Cisco Macro Analyzer product shell', () => {
   it('opens a visual Dependency map from each Entry Macro', () => {
     expect(html).toContain('id="dependency-map-dialog"');
     expect(html).toContain('id="dependency-map-canvas"');
-    expect(html).toContain('Domain · in use');
-    expect(html).toContain('Domain · not in use');
+    expect(html).toContain('Destination · In Use');
+    expect(html).toContain('Destination · Use Unknown');
+    expect(html).toContain('Destination · Not In Use');
+    expect(html).toContain('id="dependency-map-show-comments"');
+    expect(html).toContain('id="dependency-url-inspector"');
+    expect(html).toContain('id="dependency-map-zoom-out"');
+    expect(html).toContain('id="dependency-map-fit"');
+    expect(html).toContain('id="dependency-map-zoom-in"');
+    expect(html).toContain('id="dependency-map-zoom-value"');
+    expect(html).toContain('id="dependency-map-download"');
+    expect(html).toContain('id="dependency-map-key"');
+    expect(html).toContain('aria-keyshortcuts="- _"');
+    expect(html).toContain('aria-keyshortcuts="+ ="');
     expect(main).toContain('data-dependency-map-entry=');
-    expect(main).toContain('buildDependencyMap(report, entryFileId)');
+    expect(main).toMatch(
+      /buildDependencyMap\(\s*dependencyMapView\.report,\s*dependencyMapView\.entryFileId,/,
+    );
     expect(main).toContain('buildDependencyMap(report, fileId).counts.dependencies');
     expect(main).toContain("dependencyCount === 0 ? ' disabled' : ''");
     expect(main).toContain('dependency-map-button-count');
     expect(main).toContain('renderDependencyMapSvg(model)');
     expect(main).toContain('elements.dependencyMapDialog.showModal()');
+    expect(main).toContain('function fitDependencyMap(');
+    expect(main).toContain('function setDependencyMapFocus(');
+    expect(main).toContain('dependencyMapView.model = model;');
+    expect(main).toContain("elements.dependencyMapCanvas.addEventListener('pointerdown'");
+    expect(main).toContain("elements.dependencyMapCanvas.addEventListener('pointermove'");
+    expect(main).toContain('setPointerCapture(event.pointerId)');
+    expect(main).toContain("window.addEventListener('keydown'");
+    expect(main).toContain("elements.dependencyMapCanvas.addEventListener('wheel'");
+    expect(main).toContain('event.metaKey || event.ctrlKey');
+    expect(main).toContain('{ passive: false }');
+    expect(main).toContain('function downloadDependencyMapPng(');
+    expect(main).toContain('new XMLSerializer()');
     expect(css).toContain('.dependency-map-button { width: 132px');
     expect(css).toContain('.dependency-map-button:disabled');
     expect(css).toContain('.dependency-map-button-count');
     expect(css).toContain('.dependency-map-svg');
-    expect(css).toContain('width: min(1600px, calc(100vw - 24px))');
-    expect(css).toContain('height: min(1100px, calc(100dvh - 24px))');
-    expect(css).toContain('grid-template-rows: auto auto auto auto minmax(0, 1fr) auto');
+    expect(css).toContain('width: 100vw');
+    expect(css).toContain('height: 100dvh');
+    expect(css).toContain('grid-template-rows: auto auto minmax(0, 1fr)');
+    expect(css).toContain('.dependency-map-key { position: absolute');
     expect(css).toContain('.dependency-map-node.external');
     expect(css).toContain('.dependency-map-node.external.not-in-use');
     expect(css).toContain('.dependency-map-edge.external-url');
     expect(css).toContain('.dependency-map-edge.skip-level');
+    expect(css).toContain('.dependency-map-edge.is-dimmed');
+    expect(css).toContain('.dependency-map-node.is-dimmed');
+    expect(css).toContain('.dependency-map-zoom-controls');
+    expect(css).toContain('cursor: grab');
+    expect(css).toContain('.dependency-map-canvas.is-panning');
     expect(css).toContain('grid-template-columns: 28px minmax(120px, 1fr) 182px 276px');
     expect(css).toContain('.macro-relationship-badges { width: 182px; }');
     expect(css).toContain('.macro-impact-links { width: 276px;');
@@ -269,24 +389,106 @@ describe('Cisco Macro Analyzer product shell', () => {
   });
 
   it('shows subscription-specific analytics without replacing general xAPI counts', () => {
-    expect(main).toContain("'Subscription registrations'");
+    expect(main).toContain("'Subscriptions'");
     expect(main).toContain('subscriptions.totalRegistrations');
     expect(main).toContain('subscriptions.uniqueSubscribedPaths');
     expect(main).toContain('subscriptions.byBranch[kind]');
     expect(main).toContain("'xAPI references'");
-    expect(main).toContain("'Unique xAPI paths'");
+    expect(main).not.toContain("summaryCard('Unique xAPI paths'");
   });
 
-  it('renders, copies, and exports the same canonical cross-schema session', () => {
-    expect(html).toContain('Analysis Session 1.0.0');
+  it('offers current and planned exports from one chooser', () => {
+    expect(html).toContain('id="export-button" type="button">Export<');
+    expect(html).toContain('id="export-dialog"');
+    expect(html).toContain('id="export-name"');
+    expect(html).toContain('>Report name<');
+    expect(html).toContain('id="export-analysis-button"');
+    expect(html).toContain('>Export Analysis JSON<');
+    expect(html).toMatch(
+      /id="export-report-button"[^>]*disabled[^>]*>[\s\S]*Export Report[\s\S]*Coming soon/,
+    );
+    expect(html).not.toContain('Copy JSON');
+    expect(html).not.toContain('id="raw-json"');
+    expect(main).toContain('defaultAnalysisExportName({');
+    expect(main).toContain('elements.exportName.value = defaultName');
+    expect(main).toContain('elements.exportDialog.showModal()');
+    expect(main).toContain(
+      "elements.exportAnalysisButton.addEventListener('click', () => void exportAnalysisJson())",
+    );
     expect(main).toContain('buildAnalysisSession({');
     expect(main).toContain('deriveAnalysisSessionPresentation(session)');
-    expect(main).toContain('JSON.stringify(session, null, 2)');
-    expect(main).toContain('JSON.stringify(state.analysis, null, 2)');
+    expect(main).not.toContain('JSON.stringify(session, null, 2)');
+    expect(main).not.toContain('JSON.stringify(state.analysis, null, 2)');
+    expect(main).toContain('createAnalysisExportBlob(session)');
+    expect(main).toContain('link.download = `${reportName}.zip`');
+    expect(exportClient).toContain("new Worker(");
+    expect(exportWorker).toContain('createAnalysisExportArchive(event.data.session)');
     expect(main).not.toContain('const exportData = primaryReport');
     expect(main).toContain('document.body.append(link)');
     expect(main).toContain('link.remove()');
     expect(main).toContain('window.setTimeout(() => URL.revokeObjectURL(url), 0)');
+  });
+
+  it('imports a complete Analysis Session JSON without re-running macro analysis', () => {
+    expect(html).toContain('id="analysis-import-input"');
+    expect(html).toContain('accept=".json,application/json"');
+    expect(html).toContain('>Import Analysis JSON<');
+    expect(main).toContain('importAnalysisSessionJson(await file.text())');
+    expect(main).toContain('renderAnalysis(session)');
+    expect(main).toContain('Results re-rendered without analyzing macros again.');
+    expect(main).toContain(
+      'state.analysis?.schemas[0]?.report.fileInventory.find',
+    );
+    expect(importClient).toContain("new Worker(");
+    expect(importWorker).toContain('parseAnalysisSessionJson(event.data.text)');
+  });
+
+  it('warns before any operation purges analyzed results', () => {
+    const importFlow = main.slice(
+      main.indexOf('async function importAnalysisFile('),
+      main.indexOf('function yieldToBrowser('),
+    );
+    const exampleFlow = main.slice(
+      main.indexOf('async function loadExample('),
+      main.indexOf('function endpointMacroSelections('),
+    );
+    const endpointFlow = main.slice(
+      main.indexOf('async function connectEndpoint('),
+      main.indexOf('function disconnectEndpoint('),
+    );
+
+    expect(html).toContain('id="analysis-purge-dialog"');
+    expect(html).toContain('id="analysis-purge-message"');
+    expect(html).toContain('id="analysis-purge-confirm"');
+    expect(html).toContain('>Keep current results<');
+    expect(html).toContain('Export the current analysis first if you want to keep a copy.');
+    expect(main).toContain('function confirmAnalysisPurge(');
+    expect(main).toContain('if (!state.analysis) return Promise.resolve(true);');
+    expect(main).toContain('Importing this Analysis JSON will permanently clear');
+    expect(main).toContain('Loading the Dependency Example will permanently clear');
+    expect(main).toContain('Connecting an Endpoint will permanently clear');
+    expect(main).toContain('Changing the included Macro Set will permanently clear');
+    expect(main).toContain('Adding files will permanently clear');
+    expect(main).toContain('Clearing the Macro Set will permanently clear');
+    expect(main).toContain('Running a new analysis will permanently replace');
+    expect(importFlow.indexOf('confirmAnalysisPurge({')).toBeLessThan(
+      importFlow.indexOf('state.files = [];'),
+    );
+    expect(exampleFlow.indexOf('confirmAnalysisPurge({')).toBeLessThan(
+      exampleFlow.indexOf('state.files = dependencyMapExampleFiles'),
+    );
+    expect(endpointFlow.indexOf('confirmAnalysisPurge({')).toBeLessThan(
+      endpointFlow.indexOf('connectToEndpoint(credentials)'),
+    );
+    expect(main).toContain("window.addEventListener('beforeunload', (event) => {");
+    expect(main).toContain('if (import.meta.env.DEV || !state.analysis) return;');
+    expect(main).toContain('event.preventDefault();');
+    expect(main).toContain('event.returnValue = true;');
+    expect(main).toContain("window.addEventListener('pagehide', () => state.endpoint?.xapi.close())");
+    expect(main).not.toContain(
+      "window.addEventListener('beforeunload', () => state.endpoint?.xapi.close())",
+    );
+    expect(css).toContain('#analysis-purge-dialog form { gap: 8px; }');
   });
 
   it('omits empty Parent branch and Not found coverage sections from xAPI cards', () => {
@@ -311,7 +513,8 @@ describe('Cisco Macro Analyzer product shell', () => {
     expect(main).toContain('analysisError?: string;');
     expect(main).toContain('if (state.analysisError)');
     expect(main).toContain('state.analysisError = error instanceof Error');
-    expect(main).toContain("state.analysisError ? 'alert' : 'status'");
+    expect(main).toContain('Boolean(state.analysisError || state.analysisImportError)');
+    expect(main).toContain("hasError ? 'alert' : 'status'");
   });
 
   it('shows determinate progress while RoomOS schemas are evaluated', () => {

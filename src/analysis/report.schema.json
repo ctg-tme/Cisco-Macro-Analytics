@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://macro-analyzer.local/schema/analysis-report-2.2.0.json",
-  "title": "Cisco Macro Analyzer Analysis Report 2.2.0",
+  "$id": "https://macro-analyzer.local/schema/analysis-report-2.3.0.json",
+  "title": "Cisco Macro Analyzer Analysis Report 2.3.0",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -22,7 +22,7 @@
     "limitations"
   ],
   "properties": {
-    "schemaVersion": { "const": "2.2.0" },
+    "schemaVersion": { "const": "2.3.0" },
     "reportId": { "type": "string", "pattern": "^report-[a-f0-9]{8}$" },
     "generatedAt": { "type": "string", "format": "date-time" },
     "provenance": { "$ref": "#/$defs/provenance" },
@@ -155,7 +155,7 @@
           "required": ["id", "version"],
           "properties": {
             "id": { "const": "analysis-report" },
-            "version": { "const": "2.2.0" }
+            "version": { "const": "2.3.0" }
           }
         },
         "analyzer": {
@@ -248,7 +248,7 @@
         "family": {
           "enum": [
             "imports",
-            "external-domains",
+            "external-destinations",
             "parser-diagnostics",
             "module-syntax",
             "lexical-scope",
@@ -518,6 +518,89 @@
         "valueConstraint": { "$ref": "#/$defs/constraint" }
       }
     },
+    "urlProvenanceHop": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transformation", "sourceReference"],
+      "properties": {
+        "transformation": {
+          "enum": [
+            "literal",
+            "binding",
+            "assignment",
+            "destructure",
+            "array-element",
+            "object-property",
+            "property-access",
+            "spread",
+            "argument-to-parameter",
+            "return",
+            "conditional",
+            "template-interpolation",
+            "string-concatenation",
+            "string-normalization",
+            "array-map",
+            "array-flat-map",
+            "array-filter",
+            "array-find",
+            "array-for-each",
+            "array-flat",
+            "array-slice",
+            "array-concat",
+            "array-join",
+            "json-stringify",
+            "json-parse",
+            "import",
+            "export",
+            "xapi-argument",
+            "xml-payload",
+            "opaque-boundary",
+            "terminal"
+          ]
+        },
+        "sourceReference": { "$ref": "#/$defs/sourceReference" },
+        "label": { "type": "string", "minLength": 1 }
+      }
+    },
+    "urlProvenanceRoute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hops"],
+      "properties": {
+        "hops": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/urlProvenanceHop" },
+          "minItems": 1
+        }
+      }
+    },
+    "urlUsageExplanation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason", "summary"],
+      "properties": {
+        "reason": {
+          "enum": [
+            "xapi-argument",
+            "xml-payload",
+            "xapi-argument-and-xml-payload",
+            "opaque-flow",
+            "dynamic-destination",
+            "never-read",
+            "logging-only",
+            "discarded",
+            "commented"
+          ]
+        },
+        "summary": { "type": "string", "minLength": 1 },
+        "lastSourceReference": { "$ref": "#/$defs/sourceReference" },
+        "provenanceRoutes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/urlProvenanceRoute" },
+          "minItems": 1
+        }
+      }
+    },
     "observation": {
       "type": "object",
       "additionalProperties": false,
@@ -527,7 +610,7 @@
         "family": {
           "enum": [
             "imports",
-            "external-domains",
+            "external-destinations",
             "parser-diagnostics",
             "module-syntax",
             "lexical-scope",
@@ -539,7 +622,9 @@
         "kind": {
           "enum": [
             "local-import",
-            "external-domain",
+            "external-dependency",
+            "commented-url",
+            "dynamic-url",
             "parser-diagnostic",
             "commonjs-syntax",
             "unresolved-identifier",
@@ -559,19 +644,15 @@
         "normalizedExpectedPath": { "type": "string", "minLength": 1 },
         "resolution": { "enum": ["resolved", "unresolved", "dynamic"] },
         "dependencyFileId": { "type": "string", "minLength": 1 },
-        "domain": { "type": "string", "minLength": 1 },
+        "destination": { "type": "string", "minLength": 1 },
         "protocol": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9+.-]*$"
         },
         "usage": {
-          "enum": [
-            "xapi-parameter",
-            "xml-payload",
-            "xapi-parameter-and-xml-payload",
-            "not-in-use"
-          ]
+          "enum": ["in-use", "use-unknown", "not-in-use"]
         },
+        "usageExplanation": { "$ref": "#/$defs/urlUsageExplanation" },
         "code": { "const": "parse-error" },
         "message": { "type": "string", "minLength": 1 },
         "form": {
@@ -649,8 +730,16 @@
           "then": { "required": ["normalizedExpectedPath", "resolution"] }
         },
         {
-          "if": { "properties": { "kind": { "const": "external-domain" } } },
-          "then": { "required": ["domain", "protocol", "usage"] }
+          "if": { "properties": { "kind": { "const": "external-dependency" } } },
+          "then": { "required": ["destination", "protocol", "usage", "usageExplanation"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "commented-url" } } },
+          "then": { "required": ["destination", "protocol", "usage", "usageExplanation"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "dynamic-url" } } },
+          "then": { "required": ["usage", "usageExplanation"] }
         },
         {
           "if": { "properties": { "kind": { "const": "parser-diagnostic" } } },

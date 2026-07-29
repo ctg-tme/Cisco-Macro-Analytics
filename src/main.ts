@@ -11,6 +11,7 @@ import {
   type VersionSchemaCoverage,
 } from './analysis/schemaCoverage';
 import type {
+  AnalysisObservation,
   AnalysisReport,
   ApiKind,
   ApiReference,
@@ -22,7 +23,9 @@ import type {
 import { calculateAndroidContainerReadiness } from './presentation/androidContainerReadiness';
 import {
   buildDependencyMap,
+  collectDependencyMapFocus,
   renderDependencyMapSvg,
+  type DependencyMapModel,
 } from './presentation/dependencyMap';
 import { groupFindingsByMacro } from './presentation/findingGroups';
 import { buildSourceSnippet } from './presentation/sourceSnippet';
@@ -57,9 +60,6 @@ import {
   type AndroidContainerIssueGroup,
   type AndroidContainerIssueReason,
 } from './presentation/androidContainerIssueGroups';
-import {
-  dependencyMapExampleFiles,
-} from './examples/dependencyMapExample';
 import { summarizeMacroSyntax } from './analytics/macroSummary';
 import {
   initializeProductTelemetry,
@@ -80,6 +80,13 @@ import {
   type AnalysisSessionResult,
   type AnalysisSessionSchema,
 } from './analysis/analysisSession';
+import { importAnalysisSessionJson } from './analysis/analysisSessionImportClient';
+import { summarizeSubscriptions } from './analysis/subscriptionAnalytics';
+import { createAnalysisExportBlob } from './export/analysisExportClient';
+import {
+  defaultAnalysisExportName,
+  normalizeAnalysisExportName,
+} from './export/analysisExportName';
 
 interface SchemaCatalog {
   schemaVersion: string;
@@ -113,16 +120,20 @@ const state: {
   files: MacroSelection[];
   analysis?: AnalysisSessionResult;
   analysisError?: string;
+  analysisImportError?: string;
+  importedAnalysisName?: string;
   endpoint?: EndpointSession;
   recentEndpoints: RecentEndpoint[];
   findingFilter: FindingFilter;
   findingScope?: FindingScope;
+  dismissedCredentialLocations: Map<string, Set<string>>;
   referenceSearch: string;
   referenceKind: 'all' | ApiKind;
 } = {
   files: [],
   recentEndpoints: loadRecentEndpoints(),
   findingFilter: 'all',
+  dismissedCredentialLocations: new Map(),
   referenceSearch: '',
   referenceKind: 'all',
 };
@@ -170,16 +181,23 @@ const elements = {
   endpointCertificateLink: byId<HTMLAnchorElement>('endpoint-certificate-link'),
   endpointConnectSubmit: byId<HTMLButtonElement>('endpoint-connect-submit'),
   endpointDisconnectConfirm: byId<HTMLButtonElement>('endpoint-disconnect-confirm'),
+  analysisPurgeDialog: byId<HTMLDialogElement>('analysis-purge-dialog'),
+  analysisPurgeMessage: byId<HTMLParagraphElement>('analysis-purge-message'),
+  analysisPurgeConfirm: byId<HTMLButtonElement>('analysis-purge-confirm'),
   catalogStatus: byId<HTMLSpanElement>('catalog-status'),
   analysisScopeCount: byId<HTMLParagraphElement>('analysis-scope-count'),
   scopeVersionCount: byId<HTMLSpanElement>('scope-version-count'),
   fileInput: byId<HTMLInputElement>('file-input'),
+  analysisImportInput: byId<HTMLInputElement>('analysis-import-input'),
+  analysisImportButton: byId<HTMLButtonElement>('analysis-import-button'),
   dropZone: byId<HTMLLabelElement>('drop-zone'),
   manualSourceActions: byId<HTMLDivElement>('manual-source-actions'),
+  sourceDivider: byId<HTMLDivElement>('source-divider'),
+  sourceGuidance: byId<HTMLParagraphElement>('source-guidance'),
   endpointSource: byId<HTMLDivElement>('endpoint-source'),
   endpointSourceName: byId<HTMLElement>('endpoint-source-name'),
-  endpointSourceHost: byId<HTMLElement>('endpoint-source-host'),
-  endpointSourceCount: byId<HTMLSpanElement>('endpoint-source-count'),
+  endpointSourceDetail: byId<HTMLParagraphElement>('endpoint-source-detail'),
+  endpointConnectedBadge: byId<HTMLSpanElement>('endpoint-connected-badge'),
   uploadTitle: byId<HTMLHeadingElement>('upload-title'),
   demoButton: byId<HTMLButtonElement>('demo-button'),
   clearButton: byId<HTMLButtonElement>('clear-button'),
@@ -203,31 +221,45 @@ const elements = {
   analysisProgressValue: byId<HTMLElement>('analysis-progress-value'),
   results: byId<HTMLElement>('results'),
   resultContext: byId<HTMLParagraphElement>('result-context'),
-  copyButton: byId<HTMLButtonElement>('copy-button'),
   exportButton: byId<HTMLButtonElement>('export-button'),
+  exportDialog: byId<HTMLDialogElement>('export-dialog'),
+  exportName: byId<HTMLInputElement>('export-name'),
+  exportAnalysisButton: byId<HTMLButtonElement>('export-analysis-button'),
+  exportAnalysisStatus: byId<HTMLElement>('export-analysis-status'),
   relationshipsTabCount: byId<HTMLSpanElement>('relationships-tab-count'),
   issuesTabCount: byId<HTMLSpanElement>('issues-tab-count'),
   androidContainerTabCount: byId<HTMLSpanElement>('android-container-tab-count'),
   xapiTabCount: byId<HTMLSpanElement>('xapi-tab-count'),
-  summaryGrid: byId<HTMLDivElement>('summary-grid'),
+  macroOverviewList: byId<HTMLDivElement>('macro-overview-list'),
   macroRelationships: byId<HTMLDivElement>('macro-relationships'),
   dependencyMapDialog: byId<HTMLDialogElement>('dependency-map-dialog'),
   dependencyMapTitle: byId<HTMLHeadingElement>('dependency-map-title'),
   dependencyMapContext: byId<HTMLParagraphElement>('dependency-map-context'),
   dependencyMapSummary: byId<HTMLDivElement>('dependency-map-summary'),
   dependencyMapCanvas: byId<HTMLDivElement>('dependency-map-canvas'),
+  dependencyMapShowComments: byId<HTMLInputElement>('dependency-map-show-comments'),
+  dependencyMapDownload: byId<HTMLButtonElement>('dependency-map-download'),
+  dependencyMapDownloadLabel: byId<HTMLSpanElement>('dependency-map-download-label'),
+  dependencyMapZoomOut: byId<HTMLButtonElement>('dependency-map-zoom-out'),
+  dependencyMapFit: byId<HTMLButtonElement>('dependency-map-fit'),
+  dependencyMapZoomIn: byId<HTMLButtonElement>('dependency-map-zoom-in'),
+  dependencyMapZoomValue: byId<HTMLOutputElement>('dependency-map-zoom-value'),
+  dependencyUrlInspector: byId<HTMLElement>('dependency-url-inspector'),
+  dependencyUrlInspectorTitle: byId<HTMLHeadingElement>('dependency-url-inspector-title'),
+  dependencyUrlInspectorContent: byId<HTMLDivElement>('dependency-url-inspector-content'),
+  dependencyUrlInspectorClose: byId<HTMLButtonElement>('dependency-url-inspector-close'),
+  dependencyUrlPrevious: byId<HTMLButtonElement>('dependency-url-previous'),
+  dependencyUrlNext: byId<HTMLButtonElement>('dependency-url-next'),
+  dependencyUrlPosition: byId<HTMLSpanElement>('dependency-url-position'),
   androidContainerReadinessDetail: byId<HTMLDivElement>('android-container-readiness-detail'),
   androidContainerIssueSummary: byId<HTMLDivElement>('android-container-issue-summary'),
   androidContainerIssueList: byId<HTMLDivElement>('android-container-issue-list'),
-  branchSummary: byId<HTMLDivElement>('branch-summary'),
-  schemaSummary: byId<HTMLDivElement>('schema-summary'),
   coverageContent: byId<HTMLDivElement>('coverage-content'),
   findingFilters: byId<HTMLDivElement>('finding-filters'),
   findingList: byId<HTMLDivElement>('finding-list'),
   xapiSearch: byId<HTMLInputElement>('xapi-search'),
   xapiKindFilter: byId<HTMLSelectElement>('xapi-kind-filter'),
   referenceList: byId<HTMLDivElement>('reference-list'),
-  rawJson: byId<HTMLElement>('raw-json'),
 };
 
 elements.appVersion.textContent = `v${manifest.Version}`;
@@ -276,10 +308,16 @@ function updateReadiness(): void {
   }
   if (!state.catalog) messages.push('wait for the RoomOS schema catalog');
   elements.analyzeButton.disabled = messages.length > 0;
-  elements.readinessMessage.setAttribute('role', state.analysisError ? 'alert' : 'status');
-  elements.readinessMessage.classList.toggle('error', Boolean(state.analysisError));
+  const hasError = Boolean(state.analysisError || state.analysisImportError);
+  elements.readinessMessage.setAttribute('role', hasError ? 'alert' : 'status');
+  elements.readinessMessage.classList.toggle('error', hasError);
   if (state.analysisError) {
     elements.readinessMessage.textContent = `Analysis failed: ${state.analysisError} Select “Analyze macro” to retry.`;
+  } else if (state.analysisImportError) {
+    elements.readinessMessage.textContent = `Import failed: ${state.analysisImportError}`;
+  } else if (state.importedAnalysisName && state.analysis) {
+    elements.readinessMessage.textContent =
+      `Imported ${state.importedAnalysisName}. Results re-rendered without analyzing macros again.`;
   } else {
     elements.readinessMessage.textContent = messages.length > 0
       ? `${messages.join(' and ').replace(/^./, (letter) => letter.toUpperCase())}.`
@@ -327,6 +365,7 @@ function renderFiles(): void {
   const connected = Boolean(endpoint);
   elements.fileCount.textContent = `${state.files.length} ${state.files.length === 1 ? 'file' : 'files'}`;
   elements.clearButton.disabled = connected || state.files.length === 0;
+  elements.clearButton.hidden = connected || state.files.length === 0;
   updateMacroListSummary();
   elements.fileList.setAttribute(
     'aria-label',
@@ -352,9 +391,18 @@ function renderFiles(): void {
   `;
   }).join('');
   elements.fileList.querySelectorAll<HTMLInputElement>('[data-inclusion-index]').forEach((input) => {
-    input.addEventListener('change', () => {
+    input.addEventListener('change', async () => {
       const selection = state.files[Number(input.dataset.inclusionIndex)];
-      if (selection) selection.included = input.checked;
+      if (!selection || selection.included === input.checked) return;
+      const previousValue = selection.included;
+      if (!await confirmAnalysisPurge({
+        message: 'Changing the included Macro Set will permanently clear the current analyzed results from this browser.',
+        confirmLabel: 'Change Macro Set',
+      })) {
+        input.checked = previousValue;
+        return;
+      }
+      selection.included = input.checked;
       resetAnalysis();
       renderFiles();
       updateMacroListSummary();
@@ -363,9 +411,14 @@ function renderFiles(): void {
   });
   elements.fileInput.disabled = connected;
   elements.dropZone.hidden = connected;
+  elements.sourceDivider.hidden = connected;
   elements.manualSourceActions.hidden = connected;
-  elements.endpointSource.hidden = !connected;
-  elements.uploadTitle.textContent = connected ? 'Endpoint macro set' : 'Upload macro files';
+  elements.uploadTitle.textContent = connected ? 'Endpoint macro set' : 'Add macro files';
+  elements.sourceGuidance.textContent = connected
+    ? 'Macros were retrieved from the connected endpoint. Disconnect to upload files from this computer instead.'
+    : 'Choose one source for the macro set.';
+  elements.endpointSource.classList.toggle('is-connected', connected);
+  elements.endpointConnectedBadge.hidden = !connected;
   elements.endpointButton.classList.toggle('is-connected', connected);
   elements.endpointButtonLabel.textContent = connected ? 'Disconnect endpoint' : 'Connect endpoint';
   elements.endpointButton.title = connected
@@ -377,8 +430,12 @@ function renderFiles(): void {
   );
   if (endpoint) {
     elements.endpointSourceName.textContent = endpoint.broadcastName;
-    elements.endpointSourceHost.textContent = endpoint.host;
-    elements.endpointSourceCount.textContent = `${endpoint.macroCount} ${endpoint.macroCount === 1 ? 'macro' : 'macros'}`;
+    elements.endpointSourceDetail.textContent =
+      `${endpoint.host} · ${endpoint.macroCount} ${endpoint.macroCount === 1 ? 'macro' : 'macros'} retrieved with source content. Endpoint source remains in browser memory only.`;
+  } else {
+    elements.endpointSourceName.textContent = 'Connect to a RoomOS endpoint';
+    elements.endpointSourceDetail.textContent =
+      'Retrieve every macro with source content directly into this browser. Endpoint source remains in browser memory only.';
   }
   updateReadiness();
 }
@@ -386,10 +443,39 @@ function renderFiles(): void {
 function resetAnalysis(): void {
   state.analysis = undefined;
   state.analysisError = undefined;
+  state.analysisImportError = undefined;
+  state.importedAnalysisName = undefined;
+  state.dismissedCredentialLocations.clear();
   elements.results.hidden = true;
 }
 
-function setAllMacrosIncluded(included: boolean): void {
+interface AnalysisPurgeWarning {
+  message: string;
+  confirmLabel: string;
+}
+
+function confirmAnalysisPurge(warning: AnalysisPurgeWarning): Promise<boolean> {
+  if (!state.analysis) return Promise.resolve(true);
+
+  elements.analysisPurgeMessage.textContent = warning.message;
+  elements.analysisPurgeConfirm.textContent = warning.confirmLabel;
+  elements.analysisPurgeDialog.returnValue = '';
+  elements.analysisPurgeDialog.showModal();
+
+  return new Promise((resolve) => {
+    elements.analysisPurgeDialog.addEventListener(
+      'close',
+      () => resolve(elements.analysisPurgeDialog.returnValue === 'confirm'),
+      { once: true },
+    );
+  });
+}
+
+async function setAllMacrosIncluded(included: boolean): Promise<void> {
+  if (!await confirmAnalysisPurge({
+    message: 'Changing the included Macro Set will permanently clear the current analyzed results from this browser.',
+    confirmLabel: 'Change Macro Set',
+  })) return;
   state.files.forEach((selection) => {
     selection.included = included;
   });
@@ -399,18 +485,23 @@ function setAllMacrosIncluded(included: boolean): void {
 
 async function addBrowserFiles(fileList: FileList | File[]): Promise<void> {
   if (state.endpoint) return;
+  const browserFiles = [...fileList]
+    .filter((file) => file.name.endsWith('.js') || file.name.endsWith('.mjs') || file.type === 'text/javascript');
+  if (browserFiles.length === 0) return;
+  if (!await confirmAnalysisPurge({
+    message: 'Adding files will permanently clear the current analyzed results from this browser.',
+    confirmLabel: 'Add files',
+  })) return;
   const used = new Set(state.files.map((selection) => selection.file.id));
-  const additions = await Promise.all([...fileList]
-    .filter((file) => file.name.endsWith('.js') || file.name.endsWith('.mjs') || file.type === 'text/javascript')
-    .map(async (file) => {
-      const browserFile = file as File & { webkitRelativePath?: string };
-      const path = browserFile.webkitRelativePath || file.name;
-      return {
-        file: { id: uniqueFileId(path, used), path, source: await file.text() },
-        included: true,
-        byteSize: file.size,
-      } satisfies MacroSelection;
-    }));
+  const additions = await Promise.all(browserFiles.map(async (file) => {
+    const browserFile = file as File & { webkitRelativePath?: string };
+    const path = browserFile.webkitRelativePath || file.name;
+    return {
+      file: { id: uniqueFileId(path, used), path, source: await file.text() },
+      included: true,
+      byteSize: file.size,
+    } satisfies MacroSelection;
+  }));
   state.files = [...state.files, ...additions]
     .sort((left, right) => left.file.path.localeCompare(right.file.path));
   resetAnalysis();
@@ -421,8 +512,13 @@ async function addBrowserFiles(fileList: FileList | File[]): Promise<void> {
   }
 }
 
-function loadExample(): void {
+async function loadExample(): Promise<void> {
   if (state.endpoint) return;
+  if (!await confirmAnalysisPurge({
+    message: 'Loading the Dependency Example will permanently clear the current analyzed results from this browser.',
+    confirmLabel: 'Load example',
+  })) return;
+  const { dependencyMapExampleFiles } = await import('./examples/dependencyMapExample');
   state.files = dependencyMapExampleFiles.map((file) => ({
     file: { ...file },
     included: true,
@@ -497,6 +593,10 @@ function openEndpointDialog(): void {
 
 async function connectEndpoint(): Promise<void> {
   if (state.endpoint) return;
+  if (!await confirmAnalysisPurge({
+    message: 'Connecting an Endpoint will permanently clear the current analyzed results from this browser.',
+    confirmLabel: 'Connect endpoint',
+  })) return;
   clearEndpointDialogError();
 
   let host = '';
@@ -601,8 +701,8 @@ async function loadSchema(snapshot: CatalogSnapshot): Promise<VerifiedSchema> {
   );
 }
 
-function summaryCard(label: string, value: number | string, detail: string, attention = false): string {
-  return `<div class="summary-card ${attention ? 'attention' : ''}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong><small>${escapeHtml(detail)}</small></div>`;
+function summaryCard(label: string, value: number | string, detail = '', attention = false): string {
+  return `<span class="summary-card ${attention ? 'attention' : ''}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong>${detail ? `<small>${escapeHtml(detail)}</small>` : ''}</span>`;
 }
 
 function versionChip(version: VersionSchemaCoverage | SchemaVersionIdentity, className = ''): string {
@@ -832,23 +932,631 @@ function bindFindingScopeControls(container: HTMLElement): void {
   });
 }
 
-function openDependencyMap(report: AnalysisReport, entryFileId: string): void {
-  const entry = report.fileInventory.find((file) => file.fileId === entryFileId);
-  if (!entry) return;
-  const model = buildDependencyMap(report, entryFileId);
-  elements.dependencyMapTitle.textContent = `Dependency map · ${entry.path}`;
-  elements.dependencyMapContext.textContent =
-    'Arrows point from each macro to its dependencies. A domain is “in use” when its URL reaches a proven xAPI argument or appears in an XML payload; “not in use” means the URL is present but neither connection is proven. These are source relationships, not runtime execution.';
+type UrlEvidenceObservation = Extract<
+  AnalysisObservation,
+  { kind: 'external-dependency' | 'dynamic-url' | 'commented-url' }
+>;
+
+interface DependencyMapView {
+  report: AnalysisReport;
+  entryFileId: string;
+  model?: DependencyMapModel;
+  selectedObservationIds: string[];
+  selectedOccurrenceIndex: number;
+  focusedNodeId?: string;
+  zoom: number;
+  zoomMode: 'fit' | 'manual';
+}
+
+let dependencyMapView: DependencyMapView | undefined;
+const dependencyMapMinimumZoom = 0.15;
+const dependencyMapMaximumZoom = 2;
+const dependencyMapZoomStep = 0.1;
+interface DependencyMapPan {
+  pointerId: number;
+  originX: number;
+  originY: number;
+  scrollLeft: number;
+  scrollTop: number;
+  moved: boolean;
+}
+interface DependencyMapZoomAnchor {
+  clientX: number;
+  clientY: number;
+}
+let dependencyMapPan: DependencyMapPan | undefined;
+let suppressDependencyMapCanvasClick = false;
+
+function urlUsageLabel(usage: UrlEvidenceObservation['usage']): string {
+  return usage === 'in-use'
+    ? 'In Use'
+    : usage === 'use-unknown'
+      ? 'Use Unknown'
+      : 'Not In Use';
+}
+
+function setDependencyMapZoom(
+  requestedZoom: number,
+  zoomMode: DependencyMapView['zoomMode'],
+  anchor?: DependencyMapZoomAnchor,
+): void {
+  if (!dependencyMapView) return;
+  const svg = elements.dependencyMapCanvas.querySelector<SVGSVGElement>(
+    '.dependency-map-svg',
+  );
+  if (!svg) return;
+  const naturalWidth = Number(svg.getAttribute('width'));
+  const naturalHeight = Number(svg.getAttribute('height'));
+  if (!Number.isFinite(naturalWidth) || !Number.isFinite(naturalHeight)) return;
+
+  const zoom = Math.min(
+    dependencyMapMaximumZoom,
+    Math.max(dependencyMapMinimumZoom, requestedZoom),
+  );
+  const canvas = elements.dependencyMapCanvas;
+  const canvasRect = canvas.getBoundingClientRect();
+  const anchorOffsetX = anchor
+    ? Math.max(0, Math.min(canvas.clientWidth, anchor.clientX - canvasRect.left))
+    : canvas.clientWidth / 2;
+  const anchorOffsetY = anchor
+    ? Math.max(0, Math.min(canvas.clientHeight, anchor.clientY - canvasRect.top))
+    : canvas.clientHeight / 2;
+  const horizontalAnchor = canvas.scrollWidth > 0
+    ? (canvas.scrollLeft + anchorOffsetX) / canvas.scrollWidth
+    : 0.5;
+  const verticalAnchor = canvas.scrollHeight > 0
+    ? (canvas.scrollTop + anchorOffsetY) / canvas.scrollHeight
+    : 0.5;
+
+  dependencyMapView.zoom = zoom;
+  dependencyMapView.zoomMode = zoomMode;
+  svg.style.width = `${naturalWidth * zoom}px`;
+  svg.style.height = `${naturalHeight * zoom}px`;
+  elements.dependencyMapZoomValue.value = `${Math.round(zoom * 100)}%`;
+  elements.dependencyMapZoomOut.disabled = zoom <= dependencyMapMinimumZoom;
+  elements.dependencyMapZoomIn.disabled = zoom >= dependencyMapMaximumZoom;
+  elements.dependencyMapFit.classList.toggle('is-active', zoomMode === 'fit');
+  elements.dependencyMapFit.setAttribute(
+    'aria-pressed',
+    String(zoomMode === 'fit'),
+  );
+
+  canvas.scrollLeft = Math.max(
+    0,
+    horizontalAnchor * canvas.scrollWidth - anchorOffsetX,
+  );
+  canvas.scrollTop = Math.max(
+    0,
+    verticalAnchor * canvas.scrollHeight - anchorOffsetY,
+  );
+}
+
+function fitDependencyMap(): void {
+  if (!dependencyMapView) return;
+  const svg = elements.dependencyMapCanvas.querySelector<SVGSVGElement>(
+    '.dependency-map-svg',
+  );
+  if (!svg) return;
+  const naturalWidth = Number(svg.getAttribute('width'));
+  const naturalHeight = Number(svg.getAttribute('height'));
+  const availableWidth = elements.dependencyMapCanvas.clientWidth - 24;
+  const availableHeight = elements.dependencyMapCanvas.clientHeight - 24;
+  if (
+    !Number.isFinite(naturalWidth)
+    || !Number.isFinite(naturalHeight)
+    || availableWidth <= 0
+    || availableHeight <= 0
+  ) return;
+  setDependencyMapZoom(
+    Math.min(1, availableWidth / naturalWidth, availableHeight / naturalHeight),
+    'fit',
+  );
+}
+
+function refreshDependencyMapZoom(): void {
+  window.requestAnimationFrame(() => {
+    if (!dependencyMapView) return;
+    if (dependencyMapView.zoomMode === 'fit') fitDependencyMap();
+    else setDependencyMapZoom(dependencyMapView.zoom, 'manual');
+  });
+}
+
+const dependencyMapExportStyleProperties = [
+  'color',
+  'fill',
+  'fill-opacity',
+  'stroke',
+  'stroke-opacity',
+  'stroke-width',
+  'stroke-dasharray',
+  'stroke-linecap',
+  'stroke-linejoin',
+  'opacity',
+  'filter',
+  'font-family',
+  'font-size',
+  'font-style',
+  'font-weight',
+  'letter-spacing',
+  'text-anchor',
+] as const;
+
+function inlineDependencyMapSvgStyles(
+  sourceSvg: SVGSVGElement,
+  clonedSvg: SVGSVGElement,
+): void {
+  const sourceElements = [
+    sourceSvg,
+    ...sourceSvg.querySelectorAll<SVGElement>('*'),
+  ];
+  const clonedElements = [
+    clonedSvg,
+    ...clonedSvg.querySelectorAll<SVGElement>('*'),
+  ];
+  sourceElements.forEach((sourceElement, index) => {
+    const clonedElement = clonedElements[index];
+    if (!clonedElement) return;
+    const computedStyle = window.getComputedStyle(sourceElement);
+    for (const property of dependencyMapExportStyleProperties) {
+      clonedElement.style.setProperty(
+        property,
+        computedStyle.getPropertyValue(property),
+      );
+    }
+  });
+}
+
+async function downloadDependencyMapPng(): Promise<void> {
+  if (!dependencyMapView) return;
+  const sourceSvg = elements.dependencyMapCanvas.querySelector<SVGSVGElement>(
+    '.dependency-map-svg',
+  );
+  if (!sourceSvg) return;
+  const naturalWidth = Number(sourceSvg.getAttribute('width'));
+  const naturalHeight = Number(sourceSvg.getAttribute('height'));
+  if (
+    !Number.isFinite(naturalWidth)
+    || !Number.isFinite(naturalHeight)
+    || naturalWidth <= 0
+    || naturalHeight <= 0
+  ) return;
+
+  elements.dependencyMapDownload.disabled = true;
+  elements.dependencyMapDownloadLabel.textContent = 'Preparing…';
+  await yieldToBrowser();
+  try {
+    const clonedSvg = sourceSvg.cloneNode(true) as SVGSVGElement;
+    inlineDependencyMapSvgStyles(sourceSvg, clonedSvg);
+    clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    clonedSvg.setAttribute('width', String(naturalWidth));
+    clonedSvg.setAttribute('height', String(naturalHeight));
+    clonedSvg.style.width = `${naturalWidth}px`;
+    clonedSvg.style.height = `${naturalHeight}px`;
+
+    const serializedSvg = new XMLSerializer().serializeToString(clonedSvg);
+    const sourceUrl =
+      `data:image/svg+xml;charset=utf-8,${encodeURIComponent(serializedSvg)}`;
+    const image = new Image();
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error('The dependency map image could not be rendered.'));
+      image.src = sourceUrl;
+    });
+
+    const maximumPixelCount = 24_000_000;
+    const exportScale = Math.min(
+      2,
+      Math.sqrt(maximumPixelCount / (naturalWidth * naturalHeight)),
+    );
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = Math.max(1, Math.round(naturalWidth * exportScale));
+    exportCanvas.height = Math.max(1, Math.round(naturalHeight * exportScale));
+    const context = exportCanvas.getContext('2d');
+    if (!context) throw new Error('The dependency map image canvas is unavailable.');
+    context.fillStyle = window.getComputedStyle(elements.dependencyMapCanvas)
+      .backgroundColor;
+    context.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+    context.drawImage(image, 0, 0, exportCanvas.width, exportCanvas.height);
+
+    const png = await new Promise<Blob>((resolve, reject) => {
+      exportCanvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error('The dependency map PNG could not be created.'));
+      }, 'image/png');
+    });
+    const url = URL.createObjectURL(png);
+    const fileName = sourcePath(dependencyMapView.entryFileId)
+      .replace(/\.[^./\\]+$/, '')
+      .replace(/[^a-z0-9._-]+/gi, '_');
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `dependency-map-${fileName || 'entry-macro'}.png`;
+    link.hidden = true;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    elements.dependencyMapDownloadLabel.textContent = 'Downloaded';
+  } catch {
+    elements.dependencyMapDownloadLabel.textContent = 'Download failed';
+  } finally {
+    elements.dependencyMapDownload.disabled = false;
+    window.setTimeout(() => {
+      elements.dependencyMapDownloadLabel.textContent = 'Download PNG';
+    }, 1400);
+  }
+}
+
+function setDependencyMapFocus(nodeId?: string): void {
+  if (!dependencyMapView) return;
+  const svg = elements.dependencyMapCanvas.querySelector<SVGSVGElement>(
+    '.dependency-map-svg',
+  );
+  if (!svg) return;
+  const nodes = [
+    ...svg.querySelectorAll<SVGGElement>('[data-dependency-node-id]'),
+  ];
+  const edges = [
+    ...svg.querySelectorAll<SVGPathElement>('[data-dependency-edge-from]'),
+  ];
+  const focusedNodeExists = nodeId
+    ? nodes.some((node) => node.dataset.dependencyNodeId === nodeId)
+    : false;
+  const focusedNodeId = focusedNodeExists ? nodeId : undefined;
+  const focus = focusedNodeId && dependencyMapView.model
+    ? collectDependencyMapFocus(dependencyMapView.model, focusedNodeId)
+    : { nodeIds: [], edgeIds: [] };
+  const connectedNodeIds = new Set(focus.nodeIds);
+  const focusedEdgeIds = new Set(focus.edgeIds);
+
+  for (const edge of edges) {
+    const isConnected = Boolean(
+      focusedNodeId
+      && focusedEdgeIds.has(edge.dataset.dependencyEdgeId ?? ''),
+    );
+    edge.classList.toggle('is-focused', isConnected);
+    edge.classList.toggle('is-dimmed', Boolean(focusedNodeId && !isConnected));
+  }
+  for (const node of nodes) {
+    const candidateId = node.dataset.dependencyNodeId ?? '';
+    const isSelected = candidateId === focusedNodeId;
+    node.classList.toggle('is-selected', isSelected);
+    node.classList.toggle(
+      'is-connected',
+      Boolean(focusedNodeId && !isSelected && connectedNodeIds.has(candidateId)),
+    );
+    node.classList.toggle(
+      'is-dimmed',
+      Boolean(focusedNodeId && !connectedNodeIds.has(candidateId)),
+    );
+    node.setAttribute('aria-pressed', String(isSelected));
+  }
+  dependencyMapView.focusedNodeId = focusedNodeId;
+}
+
+function clearDependencyUrlSelection(): void {
+  if (!dependencyMapView) return;
+  dependencyMapView.selectedObservationIds = [];
+  dependencyMapView.selectedOccurrenceIndex = 0;
+  const wasVisible = !elements.dependencyUrlInspector.hidden;
+  elements.dependencyUrlInspector.hidden = true;
+  if (wasVisible) refreshDependencyMapZoom();
+}
+
+function renderUrlEvidenceInspector(): void {
+  if (!dependencyMapView || dependencyMapView.selectedObservationIds.length === 0) {
+    const wasVisible = !elements.dependencyUrlInspector.hidden;
+    elements.dependencyUrlInspector.hidden = true;
+    if (wasVisible) refreshDependencyMapZoom();
+    return;
+  }
+  const observations = new Map(
+    dependencyMapView.report.observationLedger.map((observation) => [
+      observation.id,
+      observation,
+    ]),
+  );
+  const observation = observations.get(
+    dependencyMapView.selectedObservationIds[dependencyMapView.selectedOccurrenceIndex] ?? '',
+  );
+  if (
+    !observation
+    || !['external-dependency', 'dynamic-url', 'commented-url'].includes(observation.kind)
+  ) {
+    elements.dependencyUrlInspector.hidden = true;
+    return;
+  }
+  const urlObservation = observation as UrlEvidenceObservation;
+  const destination = urlObservation.kind === 'dynamic-url'
+    ? 'Dynamic URL'
+    : urlObservation.destination;
+  const protocol = urlObservation.protocol
+    ? ` · ${urlObservation.protocol.toUpperCase()}`
+    : '';
+  const position = urlObservation.sourceReference.range.start;
+  const routes = urlObservation.usageExplanation.provenanceRoutes ?? [];
+  const routeMarkup = routes.length > 0
+    ? routes.map((route, routeIndex) => `
+      <div class="dependency-url-route">
+        <strong>Provenance route ${routeIndex + 1}</strong>
+        <ol>${route.hops.map((hop) => `
+          <li>
+            ${escapeHtml(hop.label ? `${hop.transformation} · ${hop.label}` : hop.transformation)}
+            — ${escapeHtml(sourcePath(hop.sourceReference.fileId))}:${hop.sourceReference.range.start.line}
+          </li>`).join('')}</ol>
+      </div>`).join('')
+    : '<p>No executable provenance route is expected for this occurrence.</p>';
+
+  elements.dependencyUrlInspectorTitle.textContent = destination;
+  elements.dependencyUrlInspectorContent.innerHTML = `
+    <div class="dependency-url-inspector-status ${urlObservation.usage}">
+      ${urlUsageLabel(urlObservation.usage)}
+    </div>
+    <p class="dependency-url-location">${escapeHtml(sourcePath(urlObservation.sourceReference.fileId))}:${position.line}:${position.column}${escapeHtml(protocol)}</p>
+    <p>${escapeHtml(urlObservation.usageExplanation.summary)}</p>
+    ${renderSourcePreview(urlObservation.sourceReference)
+      || '<p>The source region is unavailable because this analysis was imported without source files.</p>'}
+    ${routeMarkup}
+  `;
+  const total = dependencyMapView.selectedObservationIds.length;
+  elements.dependencyUrlPosition.textContent =
+    `${dependencyMapView.selectedOccurrenceIndex + 1} of ${total}`;
+  elements.dependencyUrlPrevious.disabled = total < 2;
+  elements.dependencyUrlNext.disabled = total < 2;
+  const wasHidden = elements.dependencyUrlInspector.hidden;
+  elements.dependencyUrlInspector.hidden = false;
+  if (wasHidden) refreshDependencyMapZoom();
+}
+
+function selectDependencyUrlNode(nodeId: string): void {
+  if (!dependencyMapView) return;
+  const model = buildDependencyMap(
+    dependencyMapView.report,
+    dependencyMapView.entryFileId,
+    { showCommentedUrls: elements.dependencyMapShowComments.checked },
+  );
+  dependencyMapView.model = model;
+  const node = model.nodes.find((candidate) => candidate.id === nodeId);
+  if (!node?.observationIds?.length) return;
+  const priority = { 'in-use': 0, 'use-unknown': 1, 'not-in-use': 2 };
+  const observationById = new Map(
+    dependencyMapView.report.observationLedger.map((observation) => [
+      observation.id,
+      observation,
+    ]),
+  );
+  dependencyMapView.selectedObservationIds = [...node.observationIds].sort((leftId, rightId) => {
+    const left = observationById.get(leftId) as UrlEvidenceObservation | undefined;
+    const right = observationById.get(rightId) as UrlEvidenceObservation | undefined;
+    return (priority[left?.usage ?? 'not-in-use'] - priority[right?.usage ?? 'not-in-use'])
+      || (left?.sourceReference.fileId ?? '').localeCompare(right?.sourceReference.fileId ?? '')
+      || (left?.sourceReference.range.start.line ?? 0) - (right?.sourceReference.range.start.line ?? 0)
+      || (left?.sourceReference.range.start.column ?? 0) - (right?.sourceReference.range.start.column ?? 0);
+  });
+  dependencyMapView.selectedOccurrenceIndex = 0;
+  setDependencyMapFocus(nodeId);
+  renderUrlEvidenceInspector();
+}
+
+function renderDependencyMapDialog(): void {
+  if (!dependencyMapView) return;
+  const model = buildDependencyMap(
+    dependencyMapView.report,
+    dependencyMapView.entryFileId,
+    { showCommentedUrls: elements.dependencyMapShowComments.checked },
+  );
+  dependencyMapView.model = model;
   elements.dependencyMapSummary.innerHTML = `
     <span><strong>${model.counts.macros}</strong> ${model.counts.macros === 1 ? 'macro' : 'macros'}</span>
     <span><strong>${model.counts.missing}</strong> missing</span>
-    <span><strong>${model.counts.externalDomains}</strong> URL ${model.counts.externalDomains === 1 ? 'domain' : 'domains'}</span>
-    <span><strong>${model.counts.externalDomainsInUse}</strong> in use</span>
-    <span><strong>${model.counts.externalDomainsNotInUse}</strong> not in use</span>
+    <span><strong>${model.counts.externalDestinations}</strong> external ${model.counts.externalDestinations === 1 ? 'destination' : 'destinations'}</span>
+    <span><strong>${model.counts.externalDestinationsInUse + model.counts.dynamicUrlsInUse}</strong> In Use</span>
+    <span><strong>${model.counts.externalDestinationsUseUnknown + model.counts.dynamicUrlsUseUnknown}</strong> Use Unknown</span>
+    <span><strong>${model.counts.externalDestinationsNotInUse}</strong> Not In Use</span>
   `;
   elements.dependencyMapCanvas.innerHTML = renderDependencyMapSvg(model);
-  elements.dependencyMapDialog.showModal();
+  elements.dependencyMapCanvas
+    .querySelectorAll<SVGGElement>('[data-dependency-node-id]')
+    .forEach((node) => {
+      const activate = () => {
+        if (!dependencyMapView) return;
+        const nodeId = node.dataset.dependencyNodeId ?? '';
+        if (!nodeId) return;
+        if (dependencyMapView.focusedNodeId === nodeId) {
+          clearDependencyUrlSelection();
+          setDependencyMapFocus();
+          return;
+        }
+        if (node.dataset.dependencyUrlNode) {
+          selectDependencyUrlNode(nodeId);
+          return;
+        }
+        clearDependencyUrlSelection();
+        setDependencyMapFocus(nodeId);
+      };
+      node.addEventListener('click', activate);
+      node.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        activate();
+      });
+    });
+  setDependencyMapFocus(dependencyMapView.focusedNodeId);
+  if (
+    dependencyMapView.selectedObservationIds.some((id) =>
+      model.nodes.some((node) => node.observationIds?.includes(id)))
+  ) {
+    renderUrlEvidenceInspector();
+  } else {
+    clearDependencyUrlSelection();
+  }
+  refreshDependencyMapZoom();
 }
+
+function openDependencyMap(report: AnalysisReport, entryFileId: string): void {
+  const entry = report.fileInventory.find((file) => file.fileId === entryFileId);
+  if (!entry) return;
+  dependencyMapView = {
+    report,
+    entryFileId,
+    selectedObservationIds: [],
+    selectedOccurrenceIndex: 0,
+    zoom: 1,
+    zoomMode: 'fit',
+  };
+  elements.dependencyMapShowComments.checked = false;
+  elements.dependencyUrlInspector.hidden = true;
+  elements.dependencyMapTitle.textContent = `Dependency map · ${entry.path}`;
+  elements.dependencyMapContext.textContent =
+    'Arrows point from each macro to its dependencies. Select a block to focus its complete upstream and downstream route, or drag the canvas background to pan. Use + or − to zoom, or hold Command on macOS / Ctrl elsewhere while scrolling to zoom around the pointer. Select a URL block for occurrence-level evidence. URL status priority is In Use, Use Unknown, then Not In Use. In Use proves a supported source path to xAPI or executable XML; it does not claim runtime execution or network access.';
+  renderDependencyMapDialog();
+  elements.dependencyMapDialog.showModal();
+  refreshDependencyMapZoom();
+}
+
+elements.dependencyMapShowComments.addEventListener('change', () => {
+  renderDependencyMapDialog();
+});
+
+elements.dependencyMapZoomOut.addEventListener('click', () => {
+  if (!dependencyMapView) return;
+  setDependencyMapZoom(
+    dependencyMapView.zoom - dependencyMapZoomStep,
+    'manual',
+  );
+});
+
+elements.dependencyMapFit.addEventListener('click', fitDependencyMap);
+
+elements.dependencyMapZoomIn.addEventListener('click', () => {
+  if (!dependencyMapView) return;
+  setDependencyMapZoom(
+    dependencyMapView.zoom + dependencyMapZoomStep,
+    'manual',
+  );
+});
+
+elements.dependencyMapDownload.addEventListener('click', () => {
+  void downloadDependencyMapPng();
+});
+
+window.addEventListener('keydown', (event) => {
+  if (!dependencyMapView || !elements.dependencyMapDialog.open || event.altKey) return;
+  const target = event.target;
+  if (
+    target instanceof HTMLInputElement
+    || target instanceof HTMLTextAreaElement
+    || target instanceof HTMLSelectElement
+    || (target instanceof HTMLElement && target.isContentEditable)
+  ) return;
+  const zoomDirection = event.key === '+' || event.key === '='
+    ? 1
+    : event.key === '-' || event.key === '_'
+      ? -1
+      : 0;
+  if (zoomDirection === 0) return;
+  event.preventDefault();
+  setDependencyMapZoom(
+    dependencyMapView.zoom + dependencyMapZoomStep * zoomDirection,
+    'manual',
+  );
+});
+
+elements.dependencyMapCanvas.addEventListener('wheel', (event) => {
+  if (!dependencyMapView || !(event.metaKey || event.ctrlKey)) return;
+  event.preventDefault();
+  const deltaPixels = event.deltaY * (
+    event.deltaMode === WheelEvent.DOM_DELTA_LINE
+      ? 16
+      : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+        ? elements.dependencyMapCanvas.clientHeight
+        : 1
+  );
+  setDependencyMapZoom(
+    dependencyMapView.zoom * Math.exp(-deltaPixels * 0.0015),
+    'manual',
+    { clientX: event.clientX, clientY: event.clientY },
+  );
+}, { passive: false });
+
+elements.dependencyMapCanvas.addEventListener('pointerdown', (event) => {
+  if (event.button !== 0) return;
+  if (
+    event.target instanceof Element
+    && event.target.closest('[data-dependency-node-id]')
+  ) return;
+  dependencyMapPan = {
+    pointerId: event.pointerId,
+    originX: event.clientX,
+    originY: event.clientY,
+    scrollLeft: elements.dependencyMapCanvas.scrollLeft,
+    scrollTop: elements.dependencyMapCanvas.scrollTop,
+    moved: false,
+  };
+  elements.dependencyMapCanvas.classList.add('is-panning');
+  elements.dependencyMapCanvas.setPointerCapture(event.pointerId);
+  event.preventDefault();
+});
+
+elements.dependencyMapCanvas.addEventListener('pointermove', (event) => {
+  const pan = dependencyMapPan;
+  if (!pan || pan.pointerId !== event.pointerId) return;
+  const horizontalMovement = event.clientX - pan.originX;
+  const verticalMovement = event.clientY - pan.originY;
+  pan.moved ||= Math.abs(horizontalMovement) > 3 || Math.abs(verticalMovement) > 3;
+  elements.dependencyMapCanvas.scrollLeft = pan.scrollLeft - horizontalMovement;
+  elements.dependencyMapCanvas.scrollTop = pan.scrollTop - verticalMovement;
+  event.preventDefault();
+});
+
+function finishDependencyMapPan(event: PointerEvent): void {
+  const pan = dependencyMapPan;
+  if (!pan || pan.pointerId !== event.pointerId) return;
+  if (elements.dependencyMapCanvas.hasPointerCapture(event.pointerId)) {
+    elements.dependencyMapCanvas.releasePointerCapture(event.pointerId);
+  }
+  suppressDependencyMapCanvasClick = pan.moved;
+  dependencyMapPan = undefined;
+  elements.dependencyMapCanvas.classList.remove('is-panning');
+  window.setTimeout(() => {
+    suppressDependencyMapCanvasClick = false;
+  }, 0);
+}
+
+elements.dependencyMapCanvas.addEventListener('pointerup', finishDependencyMapPan);
+elements.dependencyMapCanvas.addEventListener('pointercancel', finishDependencyMapPan);
+
+elements.dependencyMapCanvas.addEventListener('click', (event) => {
+  if (suppressDependencyMapCanvasClick) return;
+  if (
+    event.target instanceof Element
+    && event.target.closest('[data-dependency-node-id]')
+  ) return;
+  clearDependencyUrlSelection();
+  setDependencyMapFocus();
+});
+
+elements.dependencyUrlInspectorClose.addEventListener('click', () => {
+  clearDependencyUrlSelection();
+  setDependencyMapFocus();
+});
+
+elements.dependencyUrlPrevious.addEventListener('click', () => {
+  if (!dependencyMapView || dependencyMapView.selectedObservationIds.length < 2) return;
+  dependencyMapView.selectedOccurrenceIndex =
+    (dependencyMapView.selectedOccurrenceIndex - 1
+      + dependencyMapView.selectedObservationIds.length)
+    % dependencyMapView.selectedObservationIds.length;
+  renderUrlEvidenceInspector();
+});
+
+elements.dependencyUrlNext.addEventListener('click', () => {
+  if (!dependencyMapView || dependencyMapView.selectedObservationIds.length < 2) return;
+  dependencyMapView.selectedOccurrenceIndex =
+    (dependencyMapView.selectedOccurrenceIndex + 1)
+    % dependencyMapView.selectedObservationIds.length;
+  renderUrlEvidenceInspector();
+});
 
 function bindDependencyMapControls(container: HTMLElement, report: AnalysisReport): void {
   container.querySelectorAll<HTMLButtonElement>('[data-dependency-map-entry]').forEach((button) => {
@@ -868,7 +1576,7 @@ function renderMacroRelationships(report: AnalysisReport): void {
     .sort((left, right) => left.path.localeCompare(right.path));
 
   elements.macroRelationships.innerHTML = `
-    <p class="macro-relationships-intro">Each Entry Macro starts an analyzed import graph. Open its Dependency map to see supplied macros, missing local imports, and URL domains classified as in use or not in use.</p>
+    <p class="macro-relationships-intro">Each Entry Macro starts an analyzed import graph. Open its Dependency map to see supplied macros, missing local imports, and External Destinations classified as In Use, Use Unknown, or Not In Use.</p>
     <div class="macro-entry-list">
       ${entryFiles.map((entry) => `<article class="macro-entry">
         ${renderMacroRelationshipRow(report, entry.fileId)}
@@ -884,55 +1592,77 @@ function renderMacroRelationships(report: AnalysisReport): void {
   bindDependencyMapControls(elements.macroRelationships, report);
 }
 
-function renderOverview(
-  report: AnalysisReport,
+function schemaCoverageForMacro(
+  session: AnalysisSessionResult,
+  fileId: string,
+): SchemaCoverage {
+  const versions = [
+    ...session.comparison.compatibleVersions,
+    ...session.comparison.incompatibleVersions,
+  ];
+  const versionsById = new Map(versions.map((version) => [version.id, version]));
+  return buildSchemaCoverage(session.schemas.map((schema) => {
+    const version = versionsById.get(schema.provenance.schemaId);
+    if (!version) {
+      throw new Error(`Schema comparison is missing ${schema.provenance.schemaId}.`);
+    }
+    return {
+      version,
+      references: schema.report.inventory.references.filter(
+        (reference) => reference.source.fileId === fileId,
+      ),
+    };
+  }));
+}
+
+function renderOverviewSummaryCards(
+  references: ApiReference[],
   groups: ReferenceGroup[],
   coverage: SchemaCoverage,
   subscriptions: AnalysisSessionPresentation['subscriptions'],
-): void {
-  const reviewCount = report.findings.filter((finding) => finding.priority !== 'informational').length;
+  findings: Finding[],
+): string {
+  const reviewCount = findings.filter((finding) => finding.priority !== 'informational').length;
   const earliestCompatible = coverage.earliestCompatibleVersion;
   const latestCompatible = coverage.latestCompatibleVersion;
-  const reachesLatestSoftware = latestCompatible?.id === coverage.latestCatalogVersion?.id;
-  const readiness = calculateAndroidContainerReadiness(report.inventory.references);
-  const readinessDetail = readiness.total === 0
-    ? 'No static xAPI paths to evaluate'
-    : readiness.determined === 0
-      ? 'No paths could be classified by the schema conventions'
-      : `${readiness.available} of ${readiness.determined} classified ${readiness.determined === 1 ? 'path' : 'paths'} available`;
-  elements.summaryGrid.innerHTML = [
-    summaryCard('xAPI references', report.inventory.references.length, 'Total uses found in source'),
-    summaryCard('Unique xAPI paths', groups.length, 'Distinct static paths across all files'),
+  const readiness = calculateAndroidContainerReadiness(references);
+  return [
+    summaryCard('xAPI references', references.length, 'Total uses found in this macro'),
     summaryCard(
-      'Subscription registrations',
+      'Subscriptions',
       subscriptions.totalRegistrations,
       `${subscriptions.uniqueSubscribedPaths} unique subscribed ${subscriptions.uniqueSubscribedPaths === 1 ? 'path' : 'paths'}${subscriptions.duplicateRegistrations > 0 ? ` · ${subscriptions.duplicateRegistrations} duplicate ${subscriptions.duplicateRegistrations === 1 ? 'registration' : 'registrations'}` : ''}`,
       subscriptions.duplicateRegistrations > 0,
     ),
     summaryCard(
-      'Schema Availability Range',
+      'Schema Range',
       earliestCompatible && latestCompatible
         ? earliestCompatible.id === latestCompatible.id
           ? earliestCompatible.release
           : `${earliestCompatible.release} → ${latestCompatible.release}`
         : groups.length === 0 ? 'Not applicable' : 'None',
       earliestCompatible && latestCompatible
-        ? reachesLatestSoftware
-          ? 'Latest software · derived from xAPI presence'
-          : `Newest fully represented snapshot; latest software is ${coverage.latestCatalogVersion?.release ?? 'not cataloged'}`
+        ? ''
         : groups.length === 0
           ? 'No static xAPI paths to establish a floor'
           : `No passing schema among ${coverage.totalVersions} checked`,
       groups.length > 0 && !earliestCompatible,
     ),
-    summaryCard('Findings to review', reviewCount, `${report.findings.length} canonical Findings`, reviewCount > 0),
+    summaryCard('General Issues', findings.length, '', reviewCount > 0),
     summaryCard(
-      'Android Container schema availability',
-      readiness.percentage === null ? '—' : `${readiness.percentage}%`,
-      readinessDetail,
+      'Android Container',
+      `${readiness.available} of ${readiness.total} Available`,
+      '',
       readiness.issues.length > 0,
     ),
   ].join('');
+}
+
+function renderBranchSummary(
+  references: ApiReference[],
+  groups: ReferenceGroup[],
+  subscriptions: AnalysisSessionPresentation['subscriptions'],
+): string {
   const kindOrder: ApiKind[] = ['Command', 'Configuration', 'Status', 'Event'];
   const kindLabels: Record<ApiKind, string> = {
     Command: 'Commands',
@@ -941,10 +1671,10 @@ function renderOverview(
     Event: 'Events',
   };
   const maximum = Math.max(1, ...kindOrder.map((kind) =>
-    report.inventory.references.filter((reference) => reference.kind === kind).length,
+    references.filter((reference) => reference.kind === kind).length,
   ));
-  elements.branchSummary.innerHTML = kindOrder.map((kind) => {
-    const total = report.inventory.references.filter((reference) => reference.kind === kind).length;
+  return kindOrder.map((kind) => {
+    const total = references.filter((reference) => reference.kind === kind).length;
     const unique = groups.filter((group) => group.kind === kind).length;
     const branchSubscriptions = subscriptions.byBranch[kind];
     const subscriptionDetail = branchSubscriptions.totalRegistrations > 0
@@ -952,8 +1682,16 @@ function renderOverview(
       : '';
     return `<div class="branch-row"><span>${kindLabels[kind]}</span><div class="branch-track"><i style="width:${Math.round((total / maximum) * 100)}%"></i></div><strong>${total} total · ${unique} unique${subscriptionDetail}</strong></div>`;
   }).join('');
+}
 
-  elements.schemaSummary.innerHTML = `
+function renderSchemaSummary(coverage: SchemaCoverage): string {
+  if (coverage.totalReferences === 0) {
+    return `
+      <div class="empty-state compact">No statically resolved xAPI paths were found in this macro, so schema availability does not apply.</div>
+      <p class="schema-boundary-note"><strong>No API Availability conclusion is needed.</strong> Schema coverage begins when this macro contains at least one statically resolved xAPI path.</p>
+    `;
+  }
+  return `
     ${coverage.compatibleVersions.length > 0
       ? versionGroup(
         'All xAPI references available',
@@ -985,6 +1723,54 @@ function renderOverview(
     </div>
     <p class="schema-boundary-note"><strong>Schema absence means unavailable; parent paths remain represented with an amber warning.</strong> Parent paths count when at least one matching descendant exists. Schema coverage does not establish Compatibility, product support, endpoint setup, physical I/O, permissions, or runtime behavior.</p>
   `;
+}
+
+function renderOverview(
+  session: AnalysisSessionResult,
+  analysis: AnalysisSessionPresentation,
+): void {
+  const report = analysis.displayReport;
+  elements.macroOverviewList.innerHTML = report.fileInventory.map((file, index) => {
+    const references = report.inventory.references.filter(
+      (reference) => reference.source.fileId === file.fileId,
+    );
+    const groups = groupReferences(references);
+    const subscriptions = summarizeSubscriptions(references);
+    const coverage = schemaCoverageForMacro(session, file.fileId);
+    const findings = report.findings.filter((finding) =>
+      finding.sourceFileIds.includes(file.fileId));
+    const roles = file.roles.length > 0
+      ? file.roles.map((role) => `${role} Macro`).join(' · ')
+      : 'Supplied Macro';
+    const activeState = file.activeState === 'Unknown' ? '' : ` · ${file.activeState}`;
+    return `<details class="macro-overview-section" data-overview-macro="${escapeHtml(file.fileId)}">
+      <summary>
+        <span class="macro-overview-title-row">
+          <span class="macro-overview-heading">
+            <span>Macro ${index + 1} of ${report.fileInventory.length}</span>
+            <strong>${escapeHtml(file.path)}</strong>
+            <small>${escapeHtml(`${roles}${activeState} · ${file.analysisState}`)}</small>
+          </span>
+          <span class="macro-overview-toggle" aria-hidden="true"></span>
+        </span>
+        <span class="summary-grid">
+          ${renderOverviewSummaryCards(references, groups, coverage, subscriptions, findings)}
+        </span>
+      </summary>
+      <div class="macro-overview-content">
+        <div class="overview-grid">
+          <section class="result-card">
+            <div class="card-heading"><div><p class="card-kicker">Macro contents</p><h3>xAPI usage by type</h3></div></div>
+            <div class="branch-summary">${renderBranchSummary(references, groups, subscriptions)}</div>
+          </section>
+          <section class="result-card">
+            <div class="card-heading"><div><p class="card-kicker">RoomOS relationship</p><h3>RoomOS schema availability</h3></div></div>
+            <div class="schema-summary">${renderSchemaSummary(coverage)}</div>
+          </section>
+        </div>
+      </div>
+    </details>`;
+  }).join('');
 
   const sourceCoverage = report.coverage;
   const newestRelease = report.provenance.schemaSnapshot.release;
@@ -992,7 +1778,7 @@ function renderOverview(
     <div class="coverage-grid">
       <div class="coverage-item"><span>Files parsed</span><strong>${sourceCoverage.files.parsed} of ${sourceCoverage.files.reachable}</strong></div>
       <div class="coverage-item"><span>Static paths</span><strong>${sourceCoverage.xapiReferences.staticallyResolved} of ${sourceCoverage.xapiReferences.candidates}</strong></div>
-      <div class="coverage-item"><span>Schema snapshots</span><strong>${coverage.totalVersions} checked</strong></div>
+      <div class="coverage-item"><span>Schema snapshots</span><strong>${analysis.coverage.totalVersions} checked</strong></div>
     </div>
     <strong>How to read these results</strong>
     <ul>
@@ -1014,28 +1800,38 @@ function plainPriority(finding: Finding): { label: string; className: string } {
 }
 
 function sourcePath(fileId: string): string {
-  return state.files.find((selection) => selection.file.id === fileId)?.file.path ?? fileId;
+  return state.files.find((selection) => selection.file.id === fileId)?.file.path
+    ?? state.analysis?.schemas[0]?.report.fileInventory.find(
+      (file) => file.fileId === fileId,
+    )?.path
+    ?? fileId;
 }
 
-function renderSourceSnippet(sourceReference: SourceReference): string {
+function renderSourcePreview(sourceReference: SourceReference): string {
   const file = state.files.find((selection) => selection.file.id === sourceReference.fileId)?.file;
   if (!file) return '';
 
   const snippet = buildSourceSnippet(file.source, sourceReference.range);
-  const reportedStart = sourceReference.range.start.line;
-  const reportedEnd = sourceReference.range.end.line;
-  const reportedLabel = reportedEnd > reportedStart
-    ? `lines ${reportedStart}–${reportedEnd}`
-    : `line ${reportedStart}`;
   const code = snippet.lines.map((line) => `
     <span class="source-code-line ${line.highlighted ? 'highlighted' : ''}">
       <span class="source-code-number" aria-hidden="true">${line.number}</span>
       <span class="source-code-text">${escapeHtml(line.text)}</span>
     </span>`).join('');
 
+  return `<pre aria-label="${escapeHtml(`${file.path}, lines ${snippet.startLine} through ${snippet.endLine}`)}"><code>${code}</code></pre>`;
+}
+
+function renderSourceSnippet(sourceReference: SourceReference): string {
+  const reportedStart = sourceReference.range.start.line;
+  const reportedEnd = sourceReference.range.end.line;
+  const reportedLabel = reportedEnd > reportedStart
+    ? `lines ${reportedStart}–${reportedEnd}`
+    : `line ${reportedStart}`;
+  const preview = renderSourcePreview(sourceReference);
+  if (!preview) return '';
   return `<details class="source-snippet">
     <summary>View code near ${reportedLabel}</summary>
-    <pre aria-label="${escapeHtml(`${file.path}, lines ${snippet.startLine} through ${snippet.endLine}`)}"><code>${code}</code></pre>
+    ${preview}
   </details>`;
 }
 
@@ -1148,6 +1944,152 @@ function renderCredentialTerms(report: AnalysisReport, finding: Finding): string
   </section>`;
 }
 
+function credentialSourceLocationKey(sourceReference: SourceReference): string {
+  return [
+    sourceReference.fileId,
+    sourceReference.range.start.line,
+    sourceReference.range.end.line,
+  ].join(':');
+}
+
+function sourceReviewProgressLabel(
+  position: number,
+  remainingCount: number,
+  dismissedCount: number,
+): string {
+  if (remainingCount === 0) return `${dismissedCount} dismissed · none remaining`;
+  return `${position} of ${remainingCount} remaining${dismissedCount > 0 ? ` · ${dismissedCount} dismissed` : ''}`;
+}
+
+function renderCredentialSourceReview(
+  finding: Finding,
+  sourceReferences: SourceReference[],
+  sourceReviews: Map<string, SourceReference[]>,
+): string {
+  if (sourceReferences.length === 0) return '';
+  sourceReviews.set(finding.id, sourceReferences);
+  const sourceCount = sourceReferences.length;
+  const dismissed = state.dismissedCredentialLocations.get(finding.id) ?? new Set<string>();
+  const remainingReferences = sourceReferences.filter(
+    (sourceReference) => !dismissed.has(credentialSourceLocationKey(sourceReference)),
+  );
+  const firstReference = remainingReferences[0];
+  const dismissedCount = sourceCount - remainingReferences.length;
+  return `<section class="finding-evidence credential-source-review" data-source-review="${escapeHtml(finding.id)}">
+    <div class="source-review-heading">
+      <div>
+        <h5>Review matched source</h5>
+        <p><strong>${sourceCount} source locations</strong> combine ${finding.observationIds.length} matched phrases. Review them one at a time or dismiss locations that are not an issue.</p>
+      </div>
+      <span data-source-review-count aria-live="polite">${sourceReviewProgressLabel(firstReference ? 1 : 0, remainingReferences.length, dismissedCount)}</span>
+    </div>
+    <div class="source-review-frame" data-source-review-frame${firstReference ? '' : ' hidden'}>
+      ${firstReference
+        ? `<strong>${escapeHtml(`${sourcePath(firstReference.fileId)} · line ${firstReference.range.start.line}`)}</strong>
+          ${renderSourcePreview(firstReference)}`
+        : ''}
+    </div>
+    <div class="source-review-empty" data-source-review-empty${firstReference ? ' hidden' : ''}>
+      <strong>All ${sourceCount} source locations dismissed</strong>
+      <p>The canonical Finding and exported report are unchanged.</p>
+    </div>
+    <p class="source-review-boundary">Dismissal affects only this local review and resets when you analyze again. It does not change the Finding or export.</p>
+    <div class="source-review-controls">
+      <button class="filter-button source-review-dismiss" type="button" data-source-review-dismiss${firstReference ? '' : ' disabled'}>Dismiss location</button>
+      <span class="source-review-navigation">
+        <button class="filter-button" type="button" data-source-review-restore${dismissedCount === 0 ? ' hidden' : ''}>Restore dismissed (${dismissedCount})</button>
+        <button class="filter-button" type="button" data-source-review-direction="previous" disabled>Previous location</button>
+        <button class="filter-button" type="button" data-source-review-direction="next"${remainingReferences.length <= 1 ? ' disabled' : ''}>Next location</button>
+      </span>
+    </div>
+  </section>`;
+}
+
+function renderFindingSourceEvidence(
+  finding: Finding,
+  sourceReferences: SourceReference[],
+  sourceReviews: Map<string, SourceReference[]>,
+): string {
+  if (finding.code === 'source.sensitive-credential-indicator') {
+    return renderCredentialSourceReview(finding, sourceReferences, sourceReviews);
+  }
+  return sourceReferences.map((reference) => renderSourceSnippet(reference)).join('');
+}
+
+function bindCredentialSourceReviewControls(
+  sourceReviews: Map<string, SourceReference[]>,
+): void {
+  elements.findingList.querySelectorAll<HTMLElement>('[data-source-review]').forEach((review) => {
+    const findingId = review.dataset.sourceReview;
+    const sourceReferences = findingId ? sourceReviews.get(findingId) : undefined;
+    const frame = review.querySelector<HTMLElement>('[data-source-review-frame]');
+    const empty = review.querySelector<HTMLElement>('[data-source-review-empty]');
+    const count = review.querySelector<HTMLElement>('[data-source-review-count]');
+    const dismiss = review.querySelector<HTMLButtonElement>('[data-source-review-dismiss]');
+    const restore = review.querySelector<HTMLButtonElement>('[data-source-review-restore]');
+    const previous = review.querySelector<HTMLButtonElement>('[data-source-review-direction="previous"]');
+    const next = review.querySelector<HTMLButtonElement>('[data-source-review-direction="next"]');
+    if (!sourceReferences || !frame || !empty || !count || !dismiss || !restore || !previous || !next) return;
+
+    let currentIndex = 0;
+    const remainingReferences = (): SourceReference[] => {
+      const dismissed = state.dismissedCredentialLocations.get(findingId ?? '');
+      return dismissed
+        ? sourceReferences.filter(
+          (sourceReference) => !dismissed.has(credentialSourceLocationKey(sourceReference)),
+        )
+        : sourceReferences;
+    };
+    const showSource = (): void => {
+      const remaining = remainingReferences();
+      currentIndex = Math.min(currentIndex, Math.max(remaining.length - 1, 0));
+      const sourceReference = remaining[currentIndex];
+      const dismissedCount = sourceReferences.length - remaining.length;
+      count.textContent = sourceReviewProgressLabel(
+        sourceReference ? currentIndex + 1 : 0,
+        remaining.length,
+        dismissedCount,
+      );
+      restore.hidden = dismissedCount === 0;
+      restore.textContent = `Restore dismissed (${dismissedCount})`;
+      dismiss.disabled = !sourceReference;
+      previous.disabled = !sourceReference || currentIndex === 0;
+      next.disabled = !sourceReference || currentIndex === remaining.length - 1;
+
+      frame.hidden = !sourceReference;
+      empty.hidden = Boolean(sourceReference);
+      if (!sourceReference) return;
+      frame.innerHTML = `
+        <strong>${escapeHtml(`${sourcePath(sourceReference.fileId)} · line ${sourceReference.range.start.line}`)}</strong>
+        ${renderSourcePreview(sourceReference)}
+      `;
+    };
+
+    dismiss.addEventListener('click', () => {
+      const sourceReference = remainingReferences()[currentIndex];
+      if (!findingId || !sourceReference) return;
+      const dismissed = state.dismissedCredentialLocations.get(findingId) ?? new Set<string>();
+      dismissed.add(credentialSourceLocationKey(sourceReference));
+      state.dismissedCredentialLocations.set(findingId, dismissed);
+      showSource();
+    });
+    restore.addEventListener('click', () => {
+      if (!findingId) return;
+      state.dismissedCredentialLocations.delete(findingId);
+      currentIndex = 0;
+      showSource();
+    });
+    previous.addEventListener('click', () => {
+      currentIndex -= 1;
+      showSource();
+    });
+    next.addEventListener('click', () => {
+      currentIndex += 1;
+      showSource();
+    });
+  });
+}
+
 function renderCanonicalFindingReference(finding: Finding): string {
   const reference = finding.relatedXapiReference;
   if (!reference?.complete || !reference.documentationUrl) return '';
@@ -1164,6 +2106,7 @@ function renderCanonicalFindingReference(finding: Finding): string {
 function renderFindingList(report: AnalysisReport): void {
   const findings = report.findings.filter(findingMatches);
   const groups = groupFindingsByMacro(report.fileInventory, findings);
+  const sourceReviews = new Map<string, SourceReference[]>();
   const priorityLabels: Record<Finding['priority'], string> = {
     required: 'Required',
     warning: 'Warning',
@@ -1227,7 +2170,7 @@ function renderFindingList(report: AnalysisReport): void {
         ${renderCanonicalFindingReference(finding)}
         ${renderFindingRoutes(report, finding)}
         ${renderFindingDependencyPaths(report, finding)}
-        ${snippetSources.map((reference) => renderSourceSnippet(reference)).join('')}
+        ${renderFindingSourceEvidence(finding, snippetSources, sourceReviews)}
         <details class="finding-rationale">
           <summary>Technical details</summary>
           <div>
@@ -1264,6 +2207,7 @@ function renderFindingList(report: AnalysisReport): void {
   elements.findingList.innerHTML = groups.length > 0
     ? groups.map(renderMacroFindingSection).join('')
     : '<div class="empty-state compact">No Findings match the current view.</div>';
+  bindCredentialSourceReviewControls(sourceReviews);
 }
 
 function renderFindings(report: AnalysisReport): void {
@@ -1554,10 +2498,11 @@ function activateResultTab(key: string): void {
 }
 
 function renderAnalysis(session: AnalysisSessionResult): void {
-  state.analysis = session;
   const analysis = deriveAnalysisSessionPresentation(session);
+  state.analysis = session;
   state.findingFilter = 'all';
   state.findingScope = undefined;
+  state.dismissedCredentialLocations.clear();
   state.referenceSearch = '';
   state.referenceKind = 'all';
   elements.xapiSearch.value = '';
@@ -1568,21 +2513,42 @@ function renderAnalysis(session: AnalysisSessionResult): void {
   elements.relationshipsTabCount.textContent = String(entryCount);
   elements.issuesTabCount.textContent = String(analysis.displayReport.findings.length);
   elements.xapiTabCount.textContent = String(groups.length);
-  renderOverview(
-    analysis.displayReport,
-    groups,
-    analysis.coverage,
-    analysis.subscriptions,
-  );
+  renderOverview(session, analysis);
   renderMacroRelationships(analysis.displayReport);
   renderFindings(analysis.displayReport);
   renderAndroidContainerIssues(analysis.primaryReport);
   renderReferenceList(analysis);
-  elements.rawJson.textContent = JSON.stringify(session, null, 2);
   renderFiles();
   activateResultTab('overview');
   elements.results.hidden = false;
   elements.results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function importAnalysisFile(file: File): Promise<void> {
+  const originalLabel = elements.analysisImportButton.textContent;
+  elements.analysisImportButton.disabled = true;
+  elements.analysisImportButton.textContent = 'Importing…';
+  state.analysisImportError = undefined;
+  updateReadiness();
+  await yieldToBrowser();
+  try {
+    const session = await importAnalysisSessionJson(await file.text());
+    if (!await confirmAnalysisPurge({
+      message: 'Importing this Analysis JSON will permanently clear the current analyzed results from this browser.',
+      confirmLabel: 'Import and replace',
+    })) return;
+    state.files = [];
+    state.importedAnalysisName = file.name;
+    renderAnalysis(session);
+  } catch (error) {
+    state.analysisImportError =
+      error instanceof Error ? error.message : 'Unknown import failure.';
+    updateReadiness();
+  } finally {
+    elements.analysisImportButton.disabled = false;
+    elements.analysisImportButton.textContent = originalLabel;
+    elements.analysisImportInput.value = '';
+  }
 }
 
 function yieldToBrowser(): Promise<void> {
@@ -1610,6 +2576,10 @@ function hideAnalysisProgress(): void {
 async function runAnalysis(): Promise<void> {
   const catalog = state.catalog;
   if (!catalog) return;
+  if (!await confirmAnalysisPurge({
+    message: 'Running a new analysis will permanently replace the current analyzed results in this browser.',
+    confirmLabel: 'Run new analysis',
+  })) return;
   const endpointAtStart = state.endpoint?.xapi;
   const buttonLabel = elements.analyzeButton.querySelector('span');
   state.analysisError = undefined;
@@ -1678,31 +2648,58 @@ async function runAnalysis(): Promise<void> {
   }
 }
 
-function exportReport(): void {
+async function exportAnalysisJson(): Promise<void> {
   if (!state.analysis) return;
-  const blob = new Blob([`${JSON.stringify(state.analysis, null, 2)}\n`], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `${state.analysis.sessionId}.json`;
-  link.hidden = true;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  const session = state.analysis;
+  const defaultName = defaultAnalysisExportName({
+    generatedAt: session.generatedAt,
+    endpointName: state.endpoint?.broadcastName,
+  });
+  const reportName = normalizeAnalysisExportName(
+    elements.exportName.value,
+    defaultName,
+  );
+  elements.exportName.value = reportName;
+  elements.exportAnalysisButton.disabled = true;
+  elements.exportAnalysisStatus.textContent = 'Preparing…';
+  await yieldToBrowser();
+  try {
+    const blob = await createAnalysisExportBlob(session);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${reportName}.zip`;
+    link.hidden = true;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    elements.exportAnalysisStatus.textContent = 'Exported';
+  } catch {
+    elements.exportAnalysisStatus.textContent = 'Export failed';
+  } finally {
+    elements.exportAnalysisButton.disabled = false;
+    window.setTimeout(() => {
+      elements.exportAnalysisStatus.textContent = 'Download';
+    }, 1400);
+  }
 }
 
-async function copyReport(): Promise<void> {
-  if (!state.analysis) return;
-  try {
-    await navigator.clipboard.writeText(JSON.stringify(state.analysis, null, 2));
-    elements.copyButton.textContent = 'Copied';
-    window.setTimeout(() => {
-      elements.copyButton.textContent = 'Copy JSON';
-    }, 1200);
-  } catch {
-    elements.copyButton.textContent = 'Copy failed';
+function openExportDialog(): void {
+  const session = state.analysis;
+  if (!session) return;
+  const defaultName = defaultAnalysisExportName({
+    generatedAt: session.generatedAt,
+    endpointName: state.endpoint?.broadcastName,
+  });
+  const analysisKey = `${session.generatedAt}|${state.endpoint?.broadcastName ?? ''}`;
+  if (elements.exportDialog.dataset.analysisKey !== analysisKey) {
+    elements.exportName.value = defaultName;
+    elements.exportDialog.dataset.analysisKey = analysisKey;
   }
+  elements.exportDialog.showModal();
+  elements.exportName.focus();
+  elements.exportName.select();
 }
 
 elements.themeSelect.addEventListener('change', () => {
@@ -1718,8 +2715,8 @@ elements.privacyButton.addEventListener('click', () => elements.privacyDialog.sh
 elements.macroListButton.addEventListener('click', () => {
   if (state.files.length > 0) elements.macroListDialog.showModal();
 });
-elements.macroSelectAll.addEventListener('click', () => setAllMacrosIncluded(true));
-elements.macroClearAll.addEventListener('click', () => setAllMacrosIncluded(false));
+elements.macroSelectAll.addEventListener('click', () => void setAllMacrosIncluded(true));
+elements.macroClearAll.addEventListener('click', () => void setAllMacrosIncluded(false));
 elements.endpointButton.addEventListener('click', () => {
   if (state.endpoint) elements.endpointDisconnectDialog.showModal();
   else openEndpointDialog();
@@ -1740,6 +2737,14 @@ elements.fileInput.addEventListener('change', () => {
   if (elements.fileInput.files) void addBrowserFiles(elements.fileInput.files);
   elements.fileInput.value = '';
 });
+elements.analysisImportButton.addEventListener(
+  'click',
+  () => elements.analysisImportInput.click(),
+);
+elements.analysisImportInput.addEventListener('change', () => {
+  const file = elements.analysisImportInput.files?.[0];
+  if (file) void importAnalysisFile(file);
+});
 elements.dropZone.addEventListener('dragover', (event) => {
   event.preventDefault();
   elements.dropZone.classList.add('is-dragging');
@@ -1750,16 +2755,23 @@ elements.dropZone.addEventListener('drop', (event) => {
   elements.dropZone.classList.remove('is-dragging');
   if (event.dataTransfer?.files) void addBrowserFiles(event.dataTransfer.files);
 });
-elements.demoButton.addEventListener('click', loadExample);
-elements.clearButton.addEventListener('click', () => {
+if (import.meta.env.DEV) {
+  elements.demoButton.hidden = false;
+  elements.demoButton.addEventListener('click', () => void loadExample());
+}
+elements.clearButton.addEventListener('click', async () => {
   if (state.endpoint) return;
+  if (!await confirmAnalysisPurge({
+    message: 'Clearing the Macro Set will permanently clear the current analyzed results from this browser.',
+    confirmLabel: 'Clear Macro Set',
+  })) return;
   state.files = [];
   resetAnalysis();
   renderFiles();
 });
 elements.analyzeButton.addEventListener('click', () => void runAnalysis());
-elements.copyButton.addEventListener('click', () => void copyReport());
-elements.exportButton.addEventListener('click', exportReport);
+elements.exportButton.addEventListener('click', openExportDialog);
+elements.exportAnalysisButton.addEventListener('click', () => void exportAnalysisJson());
 document.querySelectorAll<HTMLButtonElement>('[data-result-tab]').forEach((button) =>
   button.addEventListener('click', () => activateResultTab(button.dataset.resultTab ?? 'overview')),
 );
@@ -1775,7 +2787,17 @@ elements.xapiKindFilter.addEventListener('change', () => {
     renderReferenceList(deriveAnalysisSessionPresentation(state.analysis));
   }
 });
-window.addEventListener('beforeunload', () => state.endpoint?.xapi.close());
+window.addEventListener('resize', () => {
+  if (elements.dependencyMapDialog.open && dependencyMapView?.zoomMode === 'fit') {
+    fitDependencyMap();
+  }
+});
+window.addEventListener('beforeunload', (event) => {
+  if (import.meta.env.DEV || !state.analysis) return;
+  event.preventDefault();
+  event.returnValue = true;
+});
+window.addEventListener('pagehide', () => state.endpoint?.xapi.close());
 
 initializeProductTelemetry();
 renderFiles();

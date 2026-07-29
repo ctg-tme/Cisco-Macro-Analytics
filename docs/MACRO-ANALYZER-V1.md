@@ -63,7 +63,7 @@ Every analysis pins:
 
 The source parser accepts standard modern JavaScript independently of the Declared Target. Explicit Source Analysis extracts statically determinable observations from syntax, lexical scope, imports, and declared object structure without treating dynamic object behavior as established. Parser acceptance does not imply RoomOS runtime support; target-specific syntax support belongs to applicable Target-dependent Rules.
 
-Seeded xAPI Data Flow begins only at a statically proven `"xapi"` module import, require, or re-export origin. It follows proven aliases, destructuring, call-site argument mappings, returns, properties, exports, imports, and dependency crossings regardless of local binding names. It never seeds from an xAPI-looking property path. Dynamic or opaque boundaries become xAPI Flow Frontiers with Partial Observation Coverage, while independently proven routes remain analyzed.
+Seeded xAPI Data Flow begins only at a statically proven `"xapi"` module import, require, or re-export origin. It follows proven aliases, destructuring, call-site argument mappings, returns, properties, exports, imports, and dependency crossings regardless of local binding names. It never seeds from an xAPI-looking property path. Dynamic or opaque boundaries become Dynamic xAPI References with Partial Observation Coverage, while independently proven routes remain analyzed.
 
 Binding analysis respects assignment order and statically resolvable control flow. References before a later reassignment remain valid; a use reached by mixed xAPI and non-xAPI or unknown values is Partial and is not reconstructed as a canonical reference.
 
@@ -99,16 +99,34 @@ Each Finding contains:
 - Recommended action
 - Related xAPI and Schema Snapshot references
 
-Analysis Report schema `2.2.0` separates the file inventory, Observation Ledger, Findings, dependency relationships, and Analysis Provenance. The ledger contains every supported observation whether or not it produces a Finding, including normalized external domains and URL Usage classifications from statically recoverable network URLs, and per-file Observation Coverage reports each observation family as Complete, Partial, or Not evaluated. Report-local Source References use file identities, content hashes, and source ranges so users can join observations back to files they already possess.
+Analysis Report schema `2.3.0` separates the file inventory, Observation Ledger, Findings, dependency relationships, and Analysis Provenance. The ledger contains every supported observation whether or not it produces a Finding, including External Destinations, Dynamic URLs, Commented URLs, occurrence-level URL Usage classifications, URL Usage Explanations, and bounded URL Provenance Flows. Per-file Observation Coverage reports each observation family as Complete, Partial, or Not evaluated. Report-local Source References use file identities, content hashes, and source ranges so users can join observations back to files they already possess.
 
-Original source files, source excerpts, complete URL values and paths, literal argument values, and dynamic identifier text are never embedded or offered as an export option. External Dependency observations retain only the normalized domain and protocol. xAPI observations retain Argument Shapes, submitted syntax classification, Canonical xAPI References, documentation locators when complete, and exact binding-name routes. The local interface may render source context directly from the in-memory Macro Set.
+Original source files, source excerpts, complete URL values and paths, literal argument values, and dynamic identifier text are never embedded or offered as an export option. External Dependency observations retain only the External Destination, protocol, URL Usage, explanation, and report-safe provenance references. xAPI observations retain Argument Shapes, submitted syntax classification, Canonical xAPI References, documentation locators when complete, and exact binding-name routes. The local interface may render unredacted source context directly from the in-memory Macro Set.
+
+### URL dependency contract
+
+Each absolute URL token in executable syntax is one External Dependency Occurrence. Its External Destination identity is the normalized DNS hostname or IP literal plus any explicitly authored port; the protocol is retained separately. An authored default port is not collapsed, so `example.com`, `example.com:443`, and `example.com:8443` are separate destinations. Bracketed IPv6 destinations retain their brackets when a port is present.
+
+Each occurrence receives one URL Usage:
+
+- **In Use** when any bounded provenance route carries the URL value anywhere inside an argument delivered to a proven xAPI Touchpoint, or when the URL occurs in structurally recognized executable XML. XML independently proves source use in the closed RoomOS Macro runtime. JSON serialization or parsing only preserves provenance and never proves use by itself.
+- **Use Unknown** when no route proves In Use and at least one path crosses an unsupported transformation, unknown call, opaque mutation, unresolved or unsupplied consumer, or dynamic destination boundary.
+- **Not In Use** only when every explicit path is bounded and proven to terminate without xAPI use. This includes values that are never read, overwritten before a read, discarded through supported transformations, or used only by `console.*`.
+
+Status for one External Destination is aggregated in this priority order: In Use, Use Unknown, Not In Use. A single In Use occurrence makes the destination In Use while lower-priority occurrences remain visible in details.
+
+The versioned provenance allowlist initially covers aliases and assignments; object and array construction, access, destructuring, and spread; supported function arguments and returns; conditional and logical merges; statically recoverable callbacks; statically resolved imports and exports; template interpolation and string concatenation; `String`, trim variants, case conversion, and normalization; `map`, `flatMap`, `filter`, `find`, `findLast`, `forEach`, `flat`, `slice`, `concat`, and `join`; and `JSON.stringify` and `JSON.parse`. Content-changing string operations, `reduce`, mutating array methods, unknown calls, proxies, prototypes, and opaque external mutation are outside the initial allowlist.
+
+Dynamic-host expressions appear as Dynamic URL evidence rather than under a guessed External Destination. They are Use Unknown unless executable XML independently proves In Use. URLs in JavaScript comments are Commented URL evidence: they are Not In Use, are not External Dependencies, never affect dependency totals or External Dependency Status, and are hidden in the map by default.
+
+Every URL Usage includes a stable reason, concise explanation, last proven Source Reference, and every available provenance route. The local dependency-map inspector may use those references to show exact unredacted source regions because the Macro Set is already in memory. Canonical reports and exports continue to omit URL paths and source text.
 
 ## v1 evidence scope
 
 The first trustworthy release includes:
 
-1. JavaScript parsing, lexical-binding observations, local-import and external-domain coverage, Entry Macro selection, dependency graphs, unresolved edges, and per-family Observation Coverage.
-2. Seeded, call-site-sensitive xAPI Binding Flow with exact binding routes, xAPI Flow Frontiers, Argument Shapes, and Canonical xAPI References reconstructed in preferred New Style.
+1. JavaScript parsing, lexical-binding observations, local-import and External Destination coverage, Entry Macro selection, dependency graphs, unresolved edges, and per-family Observation Coverage.
+2. Seeded, call-site-sensitive xAPI Binding Flow with exact binding routes, Dynamic xAPI References, Argument Shapes, and Canonical xAPI References reconstructed in preferred New Style.
 3. API Availability for a complete Declared Target, including product, operating-mode, Macro Runtime Role, parameter, and configuration-value Schema Mismatches.
 4. Target-independent source rules:
    - CommonJS Migration Requirement — one Required Finding per macro for every executable `require`, `module.*`, `exports.*`, `__filename`, or `__dirname`; comments discussing CommonJS do not count.
@@ -161,7 +179,7 @@ Analysis is local to the browser. Macro source, filenames, Declared Targets, and
 - A simple static deployment and browser-local file-reading flow.
 - Real RoomOS schema data and automated acquisition work.
 - Test macros covering modern, legacy, mixed, and deprecated syntax examples.
-- An interface prototype for upload, target selection, result tabs, JSON viewing, and future endpoint connection.
+- An interface prototype for upload, target selection, result tabs, explicit ZIP export, and future endpoint connection.
 - The instinct to qualify product coverage and MTR claims rather than present them as certainty.
 
 ### Critical correctness risks
@@ -194,7 +212,7 @@ These are prototype constraints, not reasons to discard the project. They explai
 - Resolve static local imports, exports, Entry Macro graphs, dependency cycles, and default roots independently of Active state.
 - Implement lexical scope and the versioned Recognized Macro Global environment model.
 - Implement call-site-sensitive Seeded xAPI Data Flow from proven module origins through aliases, parameters, returns, properties, and supplied dependencies.
-- Record binding routes, canonical references, argument shapes, missing imports, parse failures, dynamic imports, xAPI Flow Frontiers, and computed paths as observations with explicit coverage.
+- Record binding routes, canonical references, argument shapes, missing imports, parse failures, dynamic imports, Dynamic xAPI References, and computed paths as observations with explicit coverage.
 - Emit the complete Observation Ledger before adding Findings.
 
 ### 3. Build the trusted Schema Catalog

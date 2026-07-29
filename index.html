@@ -6,7 +6,7 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://us.aptabase.com https://eu.aptabase.com wss: ws://127.0.0.1:5176 ws://localhost:5176; object-src 'none'; base-uri 'self'; form-action 'self'"
+      content="default-src 'self'; script-src 'self'; worker-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://us.aptabase.com https://eu.aptabase.com wss: ws://127.0.0.1:5176 ws://localhost:5176; object-src 'none'; base-uri 'self'; form-action 'self'"
     />
     <meta name="color-scheme" content="dark light" />
     <meta name="description" content="Analyze Cisco RoomOS macro JavaScript across every validated RoomOS schema and review xAPI version coverage." />
@@ -33,14 +33,11 @@
         </label>
         <button class="button button-quiet" id="about-button" type="button">About</button>
         <button class="button button-quiet" id="privacy-button" type="button">Privacy</button>
-        <button class="button button-secondary connect-button" id="endpoint-button" type="button">
-          <span id="endpoint-button-label">Connect endpoint</span>
-        </button>
       </nav>
     </header>
     <div class="beta-banner" role="status" aria-label="Beta release">
       <svg class="beta-gear" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.2 2h-.4a2 2 0 0 0-2 2v.2a2 2 0 0 1-1 1.7l-.4.3a2 2 0 0 1-2 0l-.2-.1a2 2 0 0 0-2.7.7l-.2.4A2 2 0 0 0 4 9.9l.2.1a2 2 0 0 1 1 1.7v.5a2 2 0 0 1-1 1.8l-.2.1a2 2 0 0 0-.7 2.7l.2.4a2 2 0 0 0 2.7.7l.2-.1a2 2 0 0 1 2 0l.4.3a2 2 0 0 1 1 1.7v.2a2 2 0 0 0 2 2h.4a2 2 0 0 0 2-2v-.2a2 2 0 0 1 1-1.7l.4-.3a2 2 0 0 1 2 0l.2.1a2 2 0 0 0 2.7-.7l.2-.4a2 2 0 0 0-.7-2.7l-.2-.1a2 2 0 0 1-1-1.8v-.5a2 2 0 0 1 1-1.7l.2-.1a2 2 0 0 0 .7-2.7l-.2-.4a2 2 0 0 0-2.7-.7l-.2.1a2 2 0 0 1-2 0l-.4-.3a2 2 0 0 1-1-1.7V4a2 2 0 0 0-2-2Z" /><circle cx="12" cy="12" r="3" /></svg>
-      <strong id="app-version">v0.3.1-BETA</strong>
+      <strong id="app-version">v0.6.5-BETA</strong>
       <svg class="beta-gear" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.2 2h-.4a2 2 0 0 0-2 2v.2a2 2 0 0 1-1 1.7l-.4.3a2 2 0 0 1-2 0l-.2-.1a2 2 0 0 0-2.7.7l-.2.4A2 2 0 0 0 4 9.9l.2.1a2 2 0 0 1 1 1.7v.5a2 2 0 0 1-1 1.8l-.2.1a2 2 0 0 0-.7 2.7l.2.4a2 2 0 0 0 2.7.7l.2-.1a2 2 0 0 1 2 0l.4.3a2 2 0 0 1 1 1.7v.2a2 2 0 0 0 2 2h.4a2 2 0 0 0 2-2v-.2a2 2 0 0 1 1-1.7l.4-.3a2 2 0 0 1 2 0l.2.1a2 2 0 0 0 2.7-.7l.2-.4a2 2 0 0 0-.7-2.7l-.2-.1a2 2 0 0 1-1-1.8v-.5a2 2 0 0 1 1-1.7l.2-.1a2 2 0 0 0 .7-2.7l-.2-.4a2 2 0 0 0-2.7-.7l-.2.1a2 2 0 0 1-2 0l-.4-.3a2 2 0 0 1-1-1.7V4a2 2 0 0 0-2-2Z" /><circle cx="12" cy="12" r="3" /></svg>
     </div>
 
@@ -49,7 +46,7 @@
         <div>
           <p class="eyebrow">RoomOS macro development tool</p>
           <h1 id="page-title">Analyze a RoomOS macro</h1>
-          <p>Upload JavaScript macro files to see the xAPI calls they contain, how those calls are used, and which validated RoomOS versions contain every referenced path.</p>
+          <p>Add JavaScript macro files from this computer or a RoomOS endpoint to see the xAPI calls they contain, how those calls are used, and which validated RoomOS versions contain every referenced path.</p>
         </div>
         <span class="catalog-status" id="catalog-status"><span class="status-dot pending"></span>Loading RoomOS versions…</span>
       </section>
@@ -59,28 +56,40 @@
         <div class="input-grid">
           <section class="input-section" aria-labelledby="upload-title">
             <div class="section-title-row">
-              <div><span class="step-number">1</span><h2 id="upload-title">Upload macro files</h2></div>
+              <div><span class="step-number">1</span><h2 id="upload-title">Add macro files</h2></div>
               <span class="count-badge" id="file-count">0 files</span>
             </div>
+            <p class="source-guidance" id="source-guidance">Choose one source for the macro set.</p>
             <label class="drop-zone" id="drop-zone" for="file-input">
               <input id="file-input" type="file" accept=".js,.mjs,text/javascript" multiple />
               <span class="drop-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" /></svg></span>
-              <strong>Drop .js files here or click to browse</strong>
-              <span>One macro is enough. Add related local modules when the macro imports them.</span>
+              <strong>Upload from this computer</strong>
+              <span>Drop .js files here or click to browse. Add related local modules when the macro imports them.</span>
             </label>
-            <div class="source-actions" id="manual-source-actions">
-              <button class="button button-secondary" id="demo-button" type="button">Load dependency example</button>
-              <button class="button button-quiet" id="clear-button" type="button" disabled>Clear files</button>
-            </div>
-            <div class="endpoint-source" id="endpoint-source" hidden>
+            <div class="source-divider" id="source-divider" aria-hidden="true"><span>or</span></div>
+            <div class="endpoint-source" id="endpoint-source">
               <span class="endpoint-source-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="11" rx="2" /><path d="M8 20h8M12 16v4" /></svg>
               </span>
               <div>
-                <strong id="endpoint-source-name">Connected endpoint</strong>
-                <p><span id="endpoint-source-host"></span> · <span id="endpoint-source-count">0 macros</span> retrieved with source content. Endpoint source remains in browser memory only.</p>
+                <strong id="endpoint-source-name">Connect to a RoomOS endpoint</strong>
+                <p id="endpoint-source-detail">Retrieve every macro with source content directly into this browser. Endpoint source remains in browser memory only.</p>
               </div>
-              <span class="endpoint-connected-badge"><i></i>Connected</span>
+              <div class="endpoint-source-actions">
+                <span class="endpoint-connected-badge" id="endpoint-connected-badge" hidden><i></i>Connected</span>
+                <button class="button button-secondary connect-button" id="endpoint-button" type="button">
+                  <span id="endpoint-button-label">Connect endpoint</span>
+                </button>
+              </div>
+            </div>
+            <div class="source-utilities" id="manual-source-actions">
+              <span class="source-utilities-label">Other options</span>
+              <div class="source-actions">
+                <input id="analysis-import-input" type="file" accept=".json,application/json" hidden />
+                <button class="button button-quiet source-utility-button" id="analysis-import-button" type="button">Import Analysis JSON</button>
+                <button class="button button-quiet source-utility-button" id="demo-button" type="button" hidden>Load dependency example</button>
+                <button class="button button-quiet source-utility-button" id="clear-button" type="button" disabled hidden>Clear files</button>
+              </div>
             </div>
             <div class="macro-list-summary" id="macro-list-summary" hidden>
               <span class="macro-list-summary-icon" aria-hidden="true">
@@ -146,8 +155,7 @@
             <p id="result-context"></p>
           </div>
           <div class="result-actions">
-            <button class="button button-secondary" id="copy-button" type="button">Copy JSON</button>
-            <button class="button button-secondary" id="export-button" type="button">Export JSON</button>
+            <button class="button button-secondary" id="export-button" type="button">Export</button>
           </div>
         </div>
 
@@ -157,21 +165,10 @@
           <button type="button" role="tab" aria-selected="false" data-result-tab="issues"><span class="tab-label">General Issues</span><span class="tab-count" id="issues-tab-count">0</span></button>
           <button type="button" role="tab" aria-selected="false" data-result-tab="android-container"><span class="tab-label">Android Issues</span><span class="tab-count" id="android-container-tab-count">0</span></button>
           <button type="button" role="tab" aria-selected="false" data-result-tab="xapi"><span class="tab-label">xAPI References</span><span class="tab-count" id="xapi-tab-count">0</span></button>
-          <button type="button" role="tab" aria-selected="false" data-result-tab="json">Raw JSON</button>
         </div>
 
         <div class="tab-panel" id="tab-overview" role="tabpanel">
-          <div class="summary-grid" id="summary-grid"></div>
-          <div class="overview-grid">
-            <section class="result-card">
-              <div class="card-heading"><div><p class="card-kicker">Macro contents</p><h3>xAPI usage by type</h3></div></div>
-              <div id="branch-summary" class="branch-summary"></div>
-            </section>
-            <section class="result-card">
-              <div class="card-heading"><div><p class="card-kicker">RoomOS relationship</p><h3>RoomOS schema availability</h3></div></div>
-              <div id="schema-summary" class="schema-summary"></div>
-            </section>
-          </div>
+          <div class="macro-overview-list" id="macro-overview-list"></div>
           <details class="analysis-notes">
             <summary>Analysis notes and limits</summary>
             <div id="coverage-content"></div>
@@ -180,7 +177,7 @@
 
         <div class="tab-panel" id="tab-relationships" role="tabpanel" hidden>
           <div class="panel-toolbar">
-            <div><h3>Entries and dependencies</h3><p>Review each analyzed Entry Macro, its supplied dependency tree, missing local imports, and external domains.</p></div>
+            <div><h3>Entries and dependencies</h3><p>Review each analyzed Entry Macro, its supplied dependency tree, missing local imports, and External Destinations.</p></div>
           </div>
           <section class="result-card">
             <div id="macro-relationships" class="macro-relationships"></div>
@@ -229,10 +226,6 @@
           <div class="reference-list" id="reference-list"></div>
         </div>
 
-        <div class="tab-panel" id="tab-json" role="tabpanel" hidden>
-          <div class="raw-heading"><div><h3>Analysis Session 1.0.0</h3><p>The canonical export contains the analyzed source inventory, every verified schema and per-schema report, cross-schema comparison, relationships, subscription metrics, effective Rule Pack, and provenance. It never includes uploaded JavaScript source or complete external URL paths.</p></div></div>
-          <pre id="raw-json"></pre>
-        </div>
       </section>
     </main>
 
@@ -240,6 +233,41 @@
       <div><img class="brand-mark small" src="/favicon.svg" width="23" height="23" alt="" aria-hidden="true" /><strong>Cisco Macro Analyzer</strong></div>
       <p>© <span id="current-year">2026</span> Cisco Systems, Inc. <span class="footer-separator" aria-hidden="true">||</span> Created by the Collaboration TME team <span class="footer-separator" aria-hidden="true">||</span> <a href="https://github.com/ctg-tme/Cisco-Macro-Analytics/issues/new" target="_blank" rel="noopener noreferrer">Bugs / Suggestions</a></p>
     </footer>
+
+    <dialog class="export-dialog" id="export-dialog" aria-labelledby="export-dialog-title">
+      <div class="dialog-heading">
+        <div><p class="card-kicker">Analysis output</p><h2 id="export-dialog-title">Export analysis</h2></div>
+        <button class="icon-button" data-dialog-close="export-dialog" type="button" aria-label="Close export options">×</button>
+      </div>
+      <p>Choose an output for the current Analysis Session Result.</p>
+      <label class="export-name-field" for="export-name">
+        <span>Report name</span>
+        <span class="export-name-control">
+          <input id="export-name" type="text" autocomplete="off" spellcheck="false" />
+          <span aria-hidden="true">.zip</span>
+        </span>
+        <small>Edit the name used for the downloaded ZIP. Unsupported filename characters become underscores.</small>
+      </label>
+      <div class="export-option-list">
+        <button class="export-option" id="export-analysis-button" type="button">
+          <span class="export-option-format" aria-hidden="true">JSON</span>
+          <span class="export-option-copy">
+            <strong>Export Analysis JSON</strong>
+            <small>Download <code>full-analysis.json</code> and one source-free JSON file per Macro under <code>independent-macro-analysis</code>.</small>
+          </span>
+          <span class="export-option-status" id="export-analysis-status">Download</span>
+        </button>
+        <button class="export-option planned" id="export-report-button" type="button" disabled>
+          <span class="export-option-format" aria-hidden="true">DOC</span>
+          <span class="export-option-copy">
+            <strong>Export Report</strong>
+            <small>A human-readable report format still needs to be designed.</small>
+          </span>
+          <span class="export-option-status">Coming soon</span>
+        </button>
+      </div>
+      <form method="dialog"><button class="button button-primary" type="submit">Close</button></form>
+    </dialog>
 
     <dialog class="macro-list-dialog" id="macro-list-dialog" aria-labelledby="macro-list-dialog-title">
       <div class="dialog-heading">
@@ -262,21 +290,76 @@
     </dialog>
 
     <dialog class="dependency-map-dialog" id="dependency-map-dialog" aria-labelledby="dependency-map-title">
-      <div class="dialog-heading">
-        <div><p class="card-kicker">Entry Macro relationships</p><h2 id="dependency-map-title">Dependency map</h2></div>
+      <div class="dialog-heading dependency-map-heading">
+        <div>
+          <p class="card-kicker">Entry Macro relationships</p>
+          <h2 id="dependency-map-title">Dependency map</h2>
+          <details class="dependency-map-guide">
+            <summary>How to use</summary>
+            <p id="dependency-map-context">Arrows point from each macro to the dependencies identified in its source.</p>
+          </details>
+        </div>
         <button class="icon-button" data-dialog-close="dependency-map-dialog" type="button" aria-label="Close Dependency map">×</button>
       </div>
-      <p id="dependency-map-context">Arrows point from each macro to the dependencies identified in its source.</p>
-      <div class="dependency-map-summary" id="dependency-map-summary" aria-label="Dependency map totals"></div>
-      <div class="dependency-map-legend" aria-label="Dependency map legend">
-        <span class="entry"><i></i>Entry Macro</span>
-        <span class="macro"><i></i>Macro</span>
-        <span class="missing"><i></i>Missing dependency</span>
-        <span class="external"><i></i>Domain · in use</span>
-        <span class="external-not-in-use"><i></i>Domain · not in use</span>
+      <div class="dependency-map-toolbar">
+        <div class="dependency-map-summary" id="dependency-map-summary" aria-label="Dependency map totals"></div>
+        <div class="dependency-map-view-controls">
+          <label class="dependency-map-comment-toggle">
+            <input id="dependency-map-show-comments" type="checkbox" />
+            Show commented URLs
+          </label>
+          <button class="button button-quiet dependency-map-download-button" id="dependency-map-download" type="button" title="Download the complete map as a PNG">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14" /></svg>
+            <span id="dependency-map-download-label">Download PNG</span>
+          </button>
+          <div class="dependency-map-zoom-controls" role="group" aria-label="Dependency map zoom">
+            <button class="dependency-map-zoom-button" id="dependency-map-zoom-out" type="button" aria-label="Zoom out" aria-keyshortcuts="- _" title="Zoom out (−)">−</button>
+            <button class="dependency-map-fit-button" id="dependency-map-fit" type="button">Fit map</button>
+            <output id="dependency-map-zoom-value" aria-live="polite">100%</output>
+            <button class="dependency-map-zoom-button" id="dependency-map-zoom-in" type="button" aria-label="Zoom in" aria-keyshortcuts="+ =" title="Zoom in (+)">+</button>
+          </div>
+        </div>
       </div>
-      <div class="dependency-map-canvas" id="dependency-map-canvas"></div>
-      <form method="dialog"><button class="button button-primary" type="submit">Close</button></form>
+      <div class="dependency-map-workspace">
+        <div class="dependency-map-canvas-frame">
+          <div class="dependency-map-canvas" id="dependency-map-canvas"></div>
+          <details class="dependency-map-key" id="dependency-map-key">
+            <summary>Key</summary>
+            <div class="dependency-map-legend" aria-label="Dependency map legend">
+              <span class="entry"><i></i>Entry Macro</span>
+              <span class="macro"><i></i>Macro</span>
+              <span class="missing"><i></i>Missing dependency</span>
+              <span class="external"><i></i>Destination · In Use</span>
+              <span class="external-unknown"><i></i>Destination · Use Unknown</span>
+              <span class="external-not-in-use"><i></i>Destination · Not In Use</span>
+            </div>
+          </details>
+        </div>
+        <aside class="dependency-url-inspector" id="dependency-url-inspector" aria-live="polite" hidden>
+          <div class="dependency-url-inspector-heading">
+            <div><p class="card-kicker">URL evidence</p><h3 id="dependency-url-inspector-title">URL details</h3></div>
+            <button class="icon-button" id="dependency-url-inspector-close" type="button" aria-label="Close URL details">×</button>
+          </div>
+          <div id="dependency-url-inspector-content"></div>
+          <div class="dependency-url-inspector-nav">
+            <button class="button button-quiet" id="dependency-url-previous" type="button">Previous</button>
+            <span id="dependency-url-position"></span>
+            <button class="button button-quiet" id="dependency-url-next" type="button">Next</button>
+          </div>
+        </aside>
+      </div>
+    </dialog>
+
+    <dialog id="analysis-purge-dialog" aria-labelledby="analysis-purge-title">
+      <div class="dialog-heading">
+        <div><p class="card-kicker">Unsaved analysis</p><h2 id="analysis-purge-title">Replace analyzed results?</h2></div>
+      </div>
+      <p id="analysis-purge-message">This operation will permanently clear the current analyzed results from this browser.</p>
+      <p>Export the current analysis first if you want to keep a copy.</p>
+      <form method="dialog">
+        <button class="button button-quiet" type="submit" value="cancel">Keep current results</button>
+        <button class="button button-danger" id="analysis-purge-confirm" type="submit" value="confirm">Replace results</button>
+      </form>
     </dialog>
 
     <dialog id="endpoint-dialog" aria-labelledby="endpoint-dialog-title">
@@ -338,7 +421,7 @@
 
     <dialog id="privacy-dialog" aria-labelledby="privacy-title">
       <div class="dialog-heading"><div><p class="card-kicker">Privacy</p><h2 id="privacy-title">Analysis stays in this browser</h2></div><button class="icon-button" data-dialog-close="privacy-dialog" type="button" aria-label="Close Privacy">×</button></div>
-      <ul class="dialog-list"><li>Uploaded or endpoint-retrieved JavaScript is parsed locally.</li><li>Endpoint credentials and macro source are not sent to an analysis service.</li><li>Only the address and broadcast name of up to five successfully connected endpoints are saved in this browser; usernames and passwords are not saved.</li><li>Anonymous Aptabase Product Telemetry records successful endpoint connections, manual Macro loading, and aggregate counts after a completed analysis. It never includes Macro names, source content, Endpoint identity or address, credentials, Declared Targets, or report findings.</li><li>Product Telemetry is disabled when the Aptabase app key is not configured.</li><li>JSON exports omit the original source text.</li></ul>
+      <ul class="dialog-list"><li>Uploaded or endpoint-retrieved JavaScript is parsed locally.</li><li>Endpoint credentials and macro source are not sent to an analysis service.</li><li>Only the address and broadcast name of up to five successfully connected endpoints are saved in this browser; usernames and passwords are not saved.</li><li>Anonymous Aptabase Product Telemetry records successful endpoint connections, manual Macro loading, and aggregate counts after a completed analysis. It never includes Macro names, source content, Endpoint identity or address, credentials, Declared Targets, or report findings.</li><li>Product Telemetry is disabled when the Aptabase app key is not configured.</li><li>The JSON files inside ZIP exports omit the original source text.</li></ul>
       <form method="dialog"><button class="button button-primary" type="submit">Close</button></form>
     </dialog>
   </body>

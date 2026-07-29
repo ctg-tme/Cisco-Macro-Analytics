@@ -55,7 +55,7 @@ function analyze(files: MacroFile[], entryMacroIds?: string[]) {
   return outcome.report;
 }
 
-describe('Analysis Report 2.2.0', () => {
+describe('Analysis Report 2.3.0', () => {
   it('produces standard deterministic SHA-256 file fingerprints', () => {
     expect(sha256('abc')).toBe(
       'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
@@ -71,12 +71,12 @@ describe('Analysis Report 2.2.0', () => {
     const validate = new Ajv2020({ strict: false, validateFormats: false }).compile(reportSchema);
 
     expect(validate(report), JSON.stringify(validate.errors)).toBe(true);
-    expect(report.schemaVersion).toBe('2.2.0');
+    expect(report.schemaVersion).toBe('2.3.0');
     expect(report.fileInventory).toHaveLength(1);
     expect(report.observationLedger.some((observation) => observation.kind === 'xapi-touchpoint')).toBe(true);
     expect(report.observationCoverage[0]?.families).toHaveLength(8);
     expect(report.provenance).toEqual(expect.objectContaining({
-      reportSchema: { id: 'analysis-report', version: '2.2.0' },
+      reportSchema: { id: 'analysis-report', version: '2.3.0' },
       parser: { name: 'Acorn', version: expect.any(String) },
       credentialVocabulary: expect.objectContaining({ version: expect.any(String) }),
       recognizedMacroGlobals: expect.objectContaining({ version: expect.any(String) }),
@@ -118,7 +118,7 @@ describe('Analysis Report 2.2.0', () => {
       expect.objectContaining({
         code: 'coverage.xapi-flow-frontier',
         evidence: 'unknown',
-        priority: 'warning',
+        priority: 'advisory',
       }),
     ]));
     expect(report.findings).not.toEqual(expect.arrayContaining([
@@ -196,7 +196,7 @@ describe('Analysis Report 2.2.0', () => {
       { family: 'xapi-touchpoints', state: 'Partial', reason: expect.any(String) },
     ]));
     expect(report.findings).toEqual(expect.arrayContaining([
-      expect.objectContaining({ code: 'coverage.xapi-flow-frontier', priority: 'warning' }),
+      expect.objectContaining({ code: 'coverage.xapi-flow-frontier', priority: 'advisory' }),
     ]));
     expect(report.findings).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'source.unresolved-identifier' }),
@@ -386,54 +386,66 @@ describe('Analysis Report 2.2.0', () => {
       ].join('\n'),
     }], ['main']);
     const domains = report.observationLedger.filter((observation) =>
-      observation.kind === 'external-domain');
+      observation.kind === 'external-dependency');
     const serialized = JSON.stringify(report);
     const validate = new Ajv2020({ strict: false, validateFormats: false }).compile(reportSchema);
 
     expect(validate(report), JSON.stringify(validate.errors)).toBe(true);
     expect(domains).toEqual([
       expect.objectContaining({
-        domain: 'api.example.com',
+        destination: 'api.example.com',
         protocol: 'https',
-        usage: 'xapi-parameter',
+        usage: 'in-use',
       }),
       expect.objectContaining({
-        domain: 'stream.example.com',
+        destination: 'stream.example.com',
         protocol: 'wss',
         usage: 'not-in-use',
       }),
       expect.objectContaining({
-        domain: 'assets.example.com',
+        destination: 'assets.example.com',
         protocol: 'https',
-        usage: 'xml-payload',
+        usage: 'in-use',
       }),
       expect.objectContaining({
-        domain: 'panel.example.com',
+        destination: 'panel.example.com',
         protocol: 'https',
-        usage: 'xapi-parameter-and-xml-payload',
+        usage: 'in-use',
       }),
       expect.objectContaining({
-        domain: 'template.example.com',
+        destination: 'template.example.com',
         protocol: 'https',
-        usage: 'xml-payload',
+        usage: 'in-use',
       }),
       expect.objectContaining({
-        domain: 'docs.example.com',
+        destination: 'docs.example.com',
         protocol: 'http',
         usage: 'not-in-use',
       }),
       expect.objectContaining({
-        domain: 'files.example.com',
+        destination: 'files.example.com',
         protocol: 'ftp',
-        usage: 'xapi-parameter',
+        usage: 'in-use',
       }),
     ]);
     expect(report.observationCoverage[0]?.families).toEqual(expect.arrayContaining([
       {
-        family: 'external-domains',
+        family: 'external-destinations',
         state: 'Partial',
-        reason: 'At least one network URL determines its domain at runtime.',
+        reason: 'At least one URL determines its external destination at runtime.',
       },
+    ]));
+    expect(report.observationLedger).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'dynamic-url',
+        protocol: 'https',
+        usage: 'use-unknown',
+      }),
+      expect.objectContaining({
+        kind: 'commented-url',
+        destination: 'comment.example.com',
+        usage: 'not-in-use',
+      }),
     ]));
     expect(serialized).not.toContain('/v1/token');
     expect(serialized).not.toContain('/rooms/');
@@ -442,7 +454,8 @@ describe('Analysis Report 2.2.0', () => {
     expect(serialized).not.toContain('/item');
     expect(serialized).not.toContain('/setup');
     expect(serialized).not.toContain('/firmware/');
-    expect(serialized).not.toContain('comment.example.com');
+    expect(serialized).toContain('comment.example.com');
+    expect(serialized).not.toContain('/ignored');
   });
 
   it('classifies a URL imported into an xAPI argument as in use', () => {
@@ -465,9 +478,9 @@ describe('Analysis Report 2.2.0', () => {
 
     expect(report.observationLedger).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        kind: 'external-domain',
-        domain: 'imported.example.com',
-        usage: 'xapi-parameter',
+        kind: 'external-dependency',
+        destination: 'imported.example.com',
+        usage: 'in-use',
         sourceReference: expect.objectContaining({ fileId: 'endpoint' }),
       }),
     ]));
@@ -494,11 +507,151 @@ describe('Analysis Report 2.2.0', () => {
 
     expect(report.observationLedger).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        kind: 'external-domain',
-        domain: 'ctg-tme.github.io',
-        usage: 'xapi-parameter',
+        kind: 'external-dependency',
+        destination: 'ctg-tme.github.io',
+        usage: 'in-use',
       }),
     ]));
+  });
+
+  it('proves URL use through map, destructuring, object reconstruction, serialization, and callback xAPI calls', () => {
+    const report = analyze([{
+      id: 'bookings',
+      path: 'bookings.js',
+      source: [
+        "import xapi from 'xapi';",
+        'const bookingTypes = [',
+        '  { MeetingPlatform: "Webex", Title: "Webex Meeting", Number: "alynch@tmedemo.webex.com" },',
+        '  { MeetingPlatform: "MicrosoftTeams", Title: "MicrosoftTeams Meeting", Number: "somenumber@example.com" },',
+        '  { MeetingPlatform: "GoogleMeet", Title: "Google Meeting", Number: "https://meet.google.com/wti-npzq-yxd" }',
+        '];',
+        'const duration = 540;',
+        'const bookings = function () {',
+        '  return bookingTypes.map(({ MeetingPlatform, Title, Number }, i) => {',
+        '    const Protocol = MeetingPlatform == "MicrosoftTeams" ? "SIP" : MeetingPlatform == "GoogleMeet" ? "WebRTC" : "Spark";',
+        '    return {',
+        '      Id: (i + 1).toString(),',
+        '      MeetingId: "MyMeeting-" + (i + 1),',
+        '      MeetingPlatform, Title, Number, Protocol,',
+        '      Organizer: { Name: "Bobby" },',
+        '      Time: { Duration: duration, EndTimeBuffer: 5, StartTime: addMinutes(new Date(), 15 * i).toJSON() }',
+        '    };',
+        '  });',
+        '};',
+        'function addMinutes(date, minutes) { date.setMinutes(date.getMinutes() + minutes); return date; }',
+        'const Bookings = { Bookings: bookings() };',
+        "console.log('Saving Bookings:', JSON.stringify(Bookings));",
+        'setTimeout(() => {',
+        '  xapi.Command.Bookings.Put({}, JSON.stringify(Bookings));',
+        '}, 5000);',
+        "xapi.Event.UserInterface.Extensions.Panel.Clicked.on(event => {",
+        "  if (event.PanelId == 'resetBookings') {",
+        '    xapi.Command.Bookings.Put({}, JSON.stringify({ Bookings: bookings() }));',
+        '  }',
+        '});',
+      ].join('\n'),
+    }], ['bookings']);
+
+    const observation = report.observationLedger.find((candidate) =>
+      candidate.kind === 'external-dependency'
+      && candidate.destination === 'meet.google.com');
+    expect(observation).toEqual(expect.objectContaining({
+      kind: 'external-dependency',
+      destination: 'meet.google.com',
+      protocol: 'https',
+      usage: 'in-use',
+      usageExplanation: expect.objectContaining({
+        reason: 'xapi-argument',
+        provenanceRoutes: expect.any(Array),
+      }),
+      sourceReference: expect.objectContaining({
+        fileId: 'bookings',
+        range: expect.objectContaining({
+          start: expect.objectContaining({ line: 5 }),
+        }),
+      }),
+    }));
+    if (observation?.kind !== 'external-dependency') {
+      throw new Error('Expected the booking URL observation.');
+    }
+    const transformations = new Set(
+      observation.usageExplanation.provenanceRoutes
+        ?.flatMap((route) => route.hops.map((hop) => hop.transformation)),
+    );
+    expect(transformations).toEqual(expect.objectContaining(new Set([
+      'literal',
+      'array-element',
+      'destructure',
+      'object-property',
+      'array-map',
+      'json-stringify',
+      'xapi-argument',
+    ])));
+    expect(observation.usageExplanation.summary).not.toMatch(/executed|network access/i);
+  });
+
+  it('distinguishes proven non-use from opaque URL escape and explains each state', () => {
+    const report = analyze([{
+      id: 'main',
+      path: 'main.js',
+      source: [
+        "const unused = { url: 'https://unused.example.com:8443/path' };",
+        "const logged = 'https://logged.example.com/path';",
+        'console.log(logged);',
+        "const escaped = 'https://unknown.example.com/path';",
+        'sendToUnknownLibrary(escaped);',
+        "export const published = 'https://exported.example.com/path';",
+      ].join('\n'),
+    }], ['main']);
+
+    expect(report.observationLedger).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'external-dependency',
+        destination: 'unused.example.com:8443',
+        usage: 'not-in-use',
+        usageExplanation: expect.objectContaining({ reason: 'never-read' }),
+      }),
+      expect.objectContaining({
+        kind: 'external-dependency',
+        destination: 'logged.example.com',
+        usage: 'not-in-use',
+        usageExplanation: expect.objectContaining({ reason: 'logging-only' }),
+      }),
+      expect.objectContaining({
+        kind: 'external-dependency',
+        destination: 'unknown.example.com',
+        usage: 'use-unknown',
+        usageExplanation: expect.objectContaining({ reason: 'opaque-flow' }),
+      }),
+      expect.objectContaining({
+        kind: 'external-dependency',
+        destination: 'exported.example.com',
+        usage: 'use-unknown',
+        usageExplanation: expect.objectContaining({ reason: 'opaque-flow' }),
+      }),
+    ]));
+  });
+
+  it('keeps authored ports in External Destination identity, including default and IP ports', () => {
+    const report = analyze([{
+      id: 'ports',
+      path: 'ports.js',
+      source: [
+        "const a = 'https://example.com/path';",
+        "const b = 'https://example.com:443/path';",
+        "const c = 'http://192.0.2.10:8080/status';",
+        "const d = 'https://[2001:db8::10]:9443/status';",
+      ].join('\n'),
+    }], ['ports']);
+    const destinations = report.observationLedger.flatMap((observation) =>
+      observation.kind === 'external-dependency' ? [observation.destination] : []);
+
+    expect(destinations).toEqual([
+      'example.com',
+      'example.com:443',
+      '192.0.2.10:8080',
+      '[2001:db8::10]:9443',
+    ]);
   });
 
   it('retains unresolved identifiers as neutral observations without attaching them to a flow-frontier Finding', () => {
@@ -868,7 +1021,7 @@ describe('Analysis Report 2.2.0', () => {
       },
     }));
     expect(report.findings).toEqual(expect.arrayContaining([
-      expect.objectContaining({ code: 'coverage.xapi-flow-frontier', priority: 'warning' }),
+      expect.objectContaining({ code: 'coverage.xapi-flow-frontier', priority: 'advisory' }),
     ]));
   });
 
@@ -913,9 +1066,9 @@ describe('Analysis Report 2.2.0', () => {
       findingCodes: report.findings.map((finding) => finding.code),
       completeness: report.coverage.completeness,
     }).toEqual({
-      schemaVersion: '2.2.0',
+      schemaVersion: '2.3.0',
       provenance: expect.objectContaining({
-        reportSchema: { id: 'analysis-report', version: '2.2.0' },
+        reportSchema: { id: 'analysis-report', version: '2.3.0' },
         schemaSnapshot: expect.objectContaining({
           id: 'roomos-test',
           upstreamUpdatedAt: '2026-07-01T00:00:00.000Z',

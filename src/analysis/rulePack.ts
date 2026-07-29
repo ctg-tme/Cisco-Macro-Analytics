@@ -12,7 +12,7 @@ import type {
   RulePack,
 } from './types';
 
-const RULE_PACK_VERSION = '2.1.0';
+const RULE_PACK_VERSION = '2.2.0';
 
 function rule(
   code: AnalysisRuleCode,
@@ -36,7 +36,7 @@ function rule(
 export const SUPPORTED_RULES: readonly EffectiveAnalysisRule[] = [
   rule('coverage.parse-failure', 'JavaScript Parse Failure', 'warning'),
   rule('coverage.dynamic-import', 'Dynamic Import Coverage Gap', 'warning'),
-  rule('coverage.xapi-flow-frontier', 'xAPI Flow Frontier', 'warning'),
+  rule('coverage.xapi-flow-frontier', 'Dynamic xAPI Reference', 'advisory'),
   rule('coverage.missing-dependency', 'Missing Dependency', 'warning'),
   rule(
     'source.commonjs-migration',

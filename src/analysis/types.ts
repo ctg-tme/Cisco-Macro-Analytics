@@ -246,7 +246,7 @@ export interface SourceReference {
 
 export type ObservationFamily =
   | 'imports'
-  | 'external-domains'
+  | 'external-destinations'
   | 'parser-diagnostics'
   | 'module-syntax'
   | 'lexical-scope'
@@ -341,16 +341,93 @@ export interface ImportObservation extends BaseObservation {
   dependencyFileId?: string;
 }
 
-export interface ExternalDomainObservation extends BaseObservation {
-  family: 'external-domains';
-  kind: 'external-domain';
-  domain: string;
+export type UrlUsageStatus = 'in-use' | 'use-unknown' | 'not-in-use';
+
+export type UrlUsageReason =
+  | 'xapi-argument'
+  | 'xml-payload'
+  | 'xapi-argument-and-xml-payload'
+  | 'opaque-flow'
+  | 'dynamic-destination'
+  | 'never-read'
+  | 'logging-only'
+  | 'discarded'
+  | 'commented';
+
+export type UrlProvenanceTransformation =
+  | 'literal'
+  | 'binding'
+  | 'assignment'
+  | 'destructure'
+  | 'array-element'
+  | 'object-property'
+  | 'property-access'
+  | 'spread'
+  | 'argument-to-parameter'
+  | 'return'
+  | 'conditional'
+  | 'template-interpolation'
+  | 'string-concatenation'
+  | 'string-normalization'
+  | 'array-map'
+  | 'array-flat-map'
+  | 'array-filter'
+  | 'array-find'
+  | 'array-for-each'
+  | 'array-flat'
+  | 'array-slice'
+  | 'array-concat'
+  | 'array-join'
+  | 'json-stringify'
+  | 'json-parse'
+  | 'import'
+  | 'export'
+  | 'xapi-argument'
+  | 'xml-payload'
+  | 'opaque-boundary'
+  | 'terminal';
+
+export interface UrlProvenanceHop {
+  transformation: UrlProvenanceTransformation;
+  sourceReference: SourceReference;
+  label?: string;
+}
+
+export interface UrlProvenanceRoute {
+  hops: UrlProvenanceHop[];
+}
+
+export interface UrlUsageExplanation {
+  reason: UrlUsageReason;
+  summary: string;
+  lastSourceReference?: SourceReference;
+  provenanceRoutes?: UrlProvenanceRoute[];
+}
+
+export interface ExternalDependencyObservation extends BaseObservation {
+  family: 'external-destinations';
+  kind: 'external-dependency';
+  destination: string;
   protocol: string;
-  usage:
-    | 'xapi-parameter'
-    | 'xml-payload'
-    | 'xapi-parameter-and-xml-payload'
-    | 'not-in-use';
+  usage: UrlUsageStatus;
+  usageExplanation: UrlUsageExplanation;
+}
+
+export interface CommentedUrlObservation extends BaseObservation {
+  family: 'external-destinations';
+  kind: 'commented-url';
+  destination: string;
+  protocol: string;
+  usage: 'not-in-use';
+  usageExplanation: UrlUsageExplanation;
+}
+
+export interface DynamicUrlObservation extends BaseObservation {
+  family: 'external-destinations';
+  kind: 'dynamic-url';
+  protocol?: string;
+  usage: UrlUsageStatus;
+  usageExplanation: UrlUsageExplanation;
 }
 
 export interface ParserDiagnosticObservation extends BaseObservation {
@@ -420,7 +497,9 @@ export interface XapiTouchpointObservation extends BaseObservation {
 
 export type AnalysisObservation =
   | ImportObservation
-  | ExternalDomainObservation
+  | ExternalDependencyObservation
+  | CommentedUrlObservation
+  | DynamicUrlObservation
   | ParserDiagnosticObservation
   | CommonJsObservation
   | UnresolvedIdentifierObservation
@@ -514,11 +593,11 @@ export interface ApiReference {
 }
 
 export interface AnalysisReport {
-  schemaVersion: '2.2.0';
+  schemaVersion: '2.3.0';
   reportId: string;
   generatedAt: string;
   provenance: {
-    reportSchema: { id: 'analysis-report'; version: '2.2.0' };
+    reportSchema: { id: 'analysis-report'; version: '2.3.0' };
     analyzer: { name: 'Cisco Macro Analyzer'; version: string };
     parser: { name: 'Acorn'; version: string };
     rulePack: { id: string; version: string };

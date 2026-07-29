@@ -6,9 +6,11 @@ import type { SchemaCoverage } from './schemaCoverage';
 import { summarizeSubscriptions, type SubscriptionAnalytics } from './subscriptionAnalytics';
 import type {
   AnalysisReport,
+  CommentedUrlObservation,
   DirectDependencyEdge,
+  DynamicUrlObservation,
   EffectiveRulePack,
-  ExternalDomainObservation,
+  ExternalDependencyObservation,
   FileInventoryEntry,
   UnresolvedDependencyEdge,
 } from './types';
@@ -27,7 +29,7 @@ export interface AnalysisSessionSchema {
 }
 
 export interface AnalysisSessionResult {
-  schemaVersion: '1.0.0';
+  schemaVersion: '1.1.0';
   sessionId: string;
   generatedAt: string;
   runtimeMetadataFields: string[];
@@ -37,7 +39,9 @@ export interface AnalysisSessionResult {
     relationships: {
       directDependencies: DirectDependencyEdge[];
       unresolvedDependencies: UnresolvedDependencyEdge[];
-      externalDomains: ExternalDomainObservation[];
+      externalDependencies: ExternalDependencyObservation[];
+      dynamicUrls: DynamicUrlObservation[];
+      commentedUrls: CommentedUrlObservation[];
     };
   };
   schemas: AnalysisSessionSchema[];
@@ -75,10 +79,24 @@ interface BuildAnalysisSessionInput {
   effectiveRulePack: EffectiveRulePack;
 }
 
-function externalDomains(report: AnalysisReport): ExternalDomainObservation[] {
+function externalDependencies(report: AnalysisReport): ExternalDependencyObservation[] {
   return report.observationLedger.filter(
-    (observation): observation is ExternalDomainObservation =>
-      observation.kind === 'external-domain',
+    (observation): observation is ExternalDependencyObservation =>
+      observation.kind === 'external-dependency',
+  );
+}
+
+function dynamicUrls(report: AnalysisReport): DynamicUrlObservation[] {
+  return report.observationLedger.filter(
+    (observation): observation is DynamicUrlObservation =>
+      observation.kind === 'dynamic-url',
+  );
+}
+
+function commentedUrls(report: AnalysisReport): CommentedUrlObservation[] {
+  return report.observationLedger.filter(
+    (observation): observation is CommentedUrlObservation =>
+      observation.kind === 'commented-url',
   );
 }
 
@@ -129,7 +147,7 @@ export function buildAnalysisSession(input: BuildAnalysisSessionInput): Analysis
   const subscriptions = summarizeSubscriptions(primaryReport.inventory.references);
 
   return {
-    schemaVersion: '1.0.0',
+    schemaVersion: '1.1.0',
     sessionId: `session-${sha256(JSON.stringify(sessionIdentity)).slice(0, 16)}`,
     generatedAt: input.generatedAt,
     runtimeMetadataFields: [
@@ -146,7 +164,9 @@ export function buildAnalysisSession(input: BuildAnalysisSessionInput): Analysis
       relationships: {
         directDependencies: primaryReport.directDependencyGraph,
         unresolvedDependencies: primaryReport.unresolvedDependencyEdges,
-        externalDomains: externalDomains(primaryReport),
+        externalDependencies: externalDependencies(primaryReport),
+        dynamicUrls: dynamicUrls(primaryReport),
+        commentedUrls: commentedUrls(primaryReport),
       },
     },
     schemas,

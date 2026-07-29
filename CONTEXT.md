@@ -35,12 +35,40 @@ A statically resolved local import from one macro to another macro in the Macro 
 _Avoid_: Dependency Macro, Helper File
 
 **External Dependency**:
-A normalized network domain identified from a statically recoverable absolute URL in an evaluated macro. The Analysis Report retains the domain, protocol, and URL Usage classification but not the complete URL or path. An External Dependency is source evidence that a macro names a network location; it does not establish that a runtime branch connects to that domain or that the service is available.
+A normalized External Destination identified from a statically recoverable absolute URL occurrence in executable Macro syntax. The Analysis Report retains the External Destination, protocol, and URL Usage classification but not the complete URL or path. An External Dependency is source evidence that a macro names a network location; it does not establish that a runtime branch connects to that destination or that the service is available.
 _Avoid_: Observed Network Connection, Remote Runtime Dependency
 
+**External Destination**:
+The normalized DNS hostname or IP literal and optional explicitly authored port named by an External Dependency occurrence. An explicit port is always preserved as part of the identity, including a protocol-default port, so an unqualified host and each host-and-port combination remain separate destinations; the protocol is retained separately.
+_Avoid_: Domain, Runtime Endpoint, URL Path
+
+**External Dependency Occurrence**:
+One statically recoverable absolute URL token in executable Macro syntax, including each repeated token within the same string or XML payload. Every occurrence has its own exact Source Reference and URL Usage, while the Analysis Report retains only its normalized External Destination and protocol rather than the complete token or path.
+_Avoid_: URL Syntax Node, Deduplicated Domain Match
+
+**Commented URL**:
+One statically recoverable absolute URL token in comment syntax. It is Not In Use source evidence with an exact Source Reference, but it is not an External Dependency and does not contribute to External Dependency Status or dependency totals.
+_Avoid_: Ignored Dependency, Comment External Dependency
+
 **URL Usage**:
-The static relationship between an External Dependency occurrence and the evaluated source. In use means the URL value reaches an argument at a proven xAPI Touchpoint or occurs inside a structurally recognized XML payload string. Not in use means the URL is present in source but neither relationship is proven. Both states are source evidence, not evidence that a runtime branch executed, and Not in use source may be invoked or edited later.
+The static relationship between a detected URL occurrence and the Macro source. In Use means the URL value has at least one statically supported source path that proves it is structurally included anywhere within an argument delivered at a proven xAPI Touchpoint, including through explicitly recoverable structure-preserving transformations, or occurs inside structurally recognized XML; XML is an independent proof route, while JSON structure only preserves provenance and does not establish use on its own, and the receiving property need not have a URL-shaped name. Not In Use means the occurrence is in comment syntax or every explicit executable path from it is proven to terminate without reaching xAPI, while Use Unknown means at least one path crosses an opaque or dynamic boundary; all three states are source evidence rather than proof that a branch executed, a value was included at runtime, network contact occurred, or a service was available.
 _Avoid_: Executed URL, Active Network Connection, Unused Forever
+
+**URL Usage Explanation**:
+Structured evidence explaining why one detected URL occurrence received its URL Usage, including a stable reason, the last proven Source Reference or destination, and its URL Provenance Flow when available. It supports troubleshooting without adding complete URL values, paths, or source text to the Analysis Report.
+_Avoid_: Status-only Label, Unstructured URL Rationale
+
+**External Dependency Status**:
+The Entry-Macro-specific summary derived from every URL Usage occurrence for one External Dependency. In Use takes precedence over Use Unknown, which takes precedence over Not In Use; lower-priority occurrences remain part of the supporting source evidence.
+_Avoid_: Domain Usage, Runtime Dependency Status
+
+**URL Provenance Flow**:
+The bounded, versioned static evidence chain by which an External Dependency occurrence remains structurally represented through explicitly modeled value transformations toward an xAPI Touchpoint within the supplied Macro Set, including across statically resolved imports and exports and through statically recoverable callback bodies without claiming the callback ran. Proof is independent of author-chosen identifiers and property names; an unrecognized transformation, missing consumer, unresolved dependency, or escape from the evaluated Macro Set does not preserve proof of either use or non-use and leaves the occurrence Use Unknown unless another supported path establishes In Use.
+_Avoid_: Runtime URL Trace, General Taint Analysis
+
+**Dynamic URL**:
+An executable URL-shaped source expression whose complete External Destination cannot be statically normalized. It is not an External Dependency because the analyzer does not invent or group it under a guessed destination. It remains Use Unknown unless structurally recognized XML independently proves In Use, and it always retains an exact Source Reference.
+_Avoid_: Guessed External Dependency, Dynamic Domain Match
 
 **Missing Dependency**:
 A statically resolved local import whose target was not supplied or could not be resolved within the Macro Set. One Missing Dependency represents each normalized expected path and retains every importer and affected Entry Macro; it is a Coverage Gap with no source available for evaluation, not a supplied macro known to be issue-free.
@@ -129,7 +157,8 @@ The canonical, versioned result of analyzing a Macro Set against a Declared Targ
 _Avoid_: Debug Dump, UI State
 
 **Analysis Session Result**:
-The canonical, versioned result of one explicit browser analysis across the selected verified Schema Snapshots. It contains the analyzed source inventory, source relationships, every per-schema Analysis Report and verified Schema Provenance record, cross-schema comparison, effective Rule Pack configuration, subscription analytics, and named runtime metadata. The product interface, Raw JSON view, copy action, and JSON download are projections of this same result.
+The canonical, versioned result of one explicit browser analysis across the selected verified Schema Snapshots. It contains the analyzed source inventory, source relationships, every per-schema Analysis Report and verified Schema Provenance record, cross-schema comparison, effective Rule Pack configuration, subscription analytics, and named runtime metadata. The product interface and explicit ZIP export are projections of this same result. The user names the ZIP before export. It contains the complete canonical result as `full-analysis.json` and a separate source-free analysis projection for every submitted Macro under `independent-macro-analysis/`.
+The complete `full-analysis.json` may be imported later to re-render the saved product interface without resubmitting or re-analyzing Macro source. An independent per-Macro projection cannot reconstruct the cross-schema session and is not accepted by this import path.
 _Avoid_: Primary Report Export, UI-only Comparison State
 
 **Analysis Observation**:
@@ -157,7 +186,7 @@ A non-scored summary of the submitted files, import resolution, statically resol
 _Avoid_: Confidence Score, Compatibility Percentage
 
 **Coverage Gap**:
-A Warning identifying a failed file parse, missing import, unresolved dependency, unproven xAPI Binding Flow, dynamic reference, or absent target input that limits what an analysis can establish without invalidating evidence gathered elsewhere.
+A Finding identifying a failed file parse, missing import, unresolved dependency, unproven xAPI Binding Flow, dynamic reference, or absent target input that limits what an analysis can establish without invalidating evidence gathered elsewhere. Most Coverage Gaps are Warnings; a Dynamic xAPI Reference is Advisory because runtime construction may be intentional and valid even though the complete path cannot be verified statically.
 _Avoid_: Macro Error, Failed Analysis
 
 **Analysis Failure**:
@@ -205,7 +234,7 @@ A JavaScript or RoomOS host-provided global binding explicitly included in the v
 _Avoid_: Assumed Global, Unresolved Identifier
 
 **Unresolved Identifier**:
-A neutral Analysis Observation recorded when an identifier use has no declaration, import, parameter, enclosing binding, or Recognized Macro Global in lexical scope. It remains available in the Observation Ledger for diagnostics and future rules, but it does not produce a Finding because the analyzer cannot establish runtime execution or rule out an unmodeled host global. It is not attached to an xAPI Flow Frontier; that Coverage Gap retains only the observations that establish the opaque xAPI boundary.
+A neutral Analysis Observation recorded when an identifier use has no declaration, import, parameter, enclosing binding, or Recognized Macro Global in lexical scope. It remains available in the Observation Ledger for diagnostics and future rules, but it does not produce a Finding because the analyzer cannot establish runtime execution or rule out an unmodeled host global. It is not attached to a Dynamic xAPI Reference; that Coverage Gap retains only the observations that establish the opaque xAPI boundary.
 _Avoid_: Missing Object Property, Proven Runtime ReferenceError
 
 **Rule Pack**:
@@ -237,16 +266,16 @@ The statically resolved mapping from arguments at one function, method, or const
 _Avoid_: Globally Tainted Function, Runtime Invocation
 
 **xAPI Binding Flow**:
-The statically proven propagation of an xAPI Binding within Seeded xAPI Data Flow through aliases, destructuring, xAPI Call Contexts, returns, instance properties, exports, imports, or equivalent local abstractions. It respects assignment order and statically resolvable control flow, and may cross supplied dependency files when imports and calls resolve statically. The analyzer evaluates only explicitly established routes: uncertain or mixed values reaching a use produce Partial Observation Coverage and a Warning Coverage Gap while independently proven routes and earlier source occurrences remain analyzed.
+The statically proven propagation of an xAPI Binding within Seeded xAPI Data Flow through aliases, destructuring, xAPI Call Contexts, returns, instance properties, exports, imports, or equivalent local abstractions. It respects assignment order and statically resolvable control flow, and may cross supplied dependency files when imports and calls resolve statically. The analyzer evaluates only explicitly established routes: uncertain or mixed values reaching a use produce Partial Observation Coverage and a Dynamic xAPI Reference Advisory while independently proven routes and earlier source occurrences remain analyzed.
 _Avoid_: Runtime Execution Trace, Name Matching
 
 **xAPI Binding Route**:
 An ordered evidence chain for one proven xAPI Binding Flow from its module origin toward an xAPI Touchpoint. Each hop identifies its exact local binding name, binding transformation, and Source Reference, allowing a renderer to explain import aliases, argument-to-parameter propagation, property assignment, or dependency crossings and support Canonical xAPI Reference reconstruction without claiming the route executed at runtime.
 _Avoid_: Call Trace, Stack Trace
 
-**xAPI Flow Frontier**:
-The last proven hop where a Seeded xAPI Data Flow enters code or a transformation the analyzer cannot resolve statically. It contributes to Partial Observation Coverage and one consolidated Warning Coverage Gap per containing macro; values returned beyond the frontier are not assumed to remain xAPI. Its Finding references only the frontier observations that establish the coverage boundary.
-_Avoid_: Unresolved Object, Assumed Return Value
+**Dynamic xAPI Reference**:
+An xAPI reference whose complete path cannot be verified from source because a path segment or binding is supplied at runtime, passes through opaque code, or may resolve to different xAPI values. The analyzer retains the last statically proven hop, marks the applicable Observation Coverage Partial, and produces one consolidated Advisory per containing macro. Dynamic construction may be intentional and correct; the injected content should be reviewed and tested on the target device before release and treated as an early troubleshooting point if an error occurs.
+_Avoid_: xAPI Flow Frontier, Unresolved Object, Assumed Return Value
 
 **Nonstandard xAPI Root Binding**:
 A Warning Observed Finding produced when the xAPI module object is imported or assigned at its module origin under a local name other than the conventional exact name `xapi`. One Finding per macro consolidates every nonstandard root occurrence. The bindings remain eligible for proven xAPI Binding Flow analysis; the Warning concerns the root naming convention and is not a Coverage Gap or compatibility claim.

@@ -33,11 +33,17 @@ export interface CommonJsOccurrence {
 }
 
 export interface StaticExternalUrl {
-  domain: string;
+  destination: string;
   protocol: string;
   xmlPayload: boolean;
   range: SourceRange;
   node: LocatedNode;
+}
+
+export interface StaticCommentedUrl {
+  destination: string;
+  protocol: string;
+  range: SourceRange;
 }
 
 export interface ParsedFile {
@@ -47,7 +53,13 @@ export interface ParsedFile {
   localImports: StaticModuleReference[];
   dynamicImports: Array<{ range: SourceRange; node: LocatedNode }>;
   externalUrls: StaticExternalUrl[];
-  dynamicExternalUrls: Array<{ range: SourceRange; node: LocatedNode; xmlPayload: boolean }>;
+  commentedUrls: StaticCommentedUrl[];
+  dynamicExternalUrls: Array<{
+    range: SourceRange;
+    node: LocatedNode;
+    xmlPayload: boolean;
+    protocol?: string;
+  }>;
   commonJsOccurrences: CommonJsOccurrence[];
   comments: ParsedComment[];
 }
@@ -306,35 +318,102 @@ export function parseMacroFile(file: MacroFile): ParseResult {
   const moduleReferences: StaticModuleReference[] = [];
   const dynamicImports: Array<{ range: SourceRange; node: LocatedNode }> = [];
   const externalUrls: StaticExternalUrl[] = [];
-  const dynamicExternalUrls: Array<{ range: SourceRange; node: LocatedNode; xmlPayload: boolean }> = [];
+  const commentedUrls: StaticCommentedUrl[] = [];
+  const dynamicExternalUrls: Array<{
+    range: SourceRange;
+    node: LocatedNode;
+    xmlPayload: boolean;
+    protocol?: string;
+  }> = [];
   const commonJsOccurrences: CommonJsOccurrence[] = [];
   const commonJsKeys = new Set<string>();
   const externalUrlKeys = new Set<string>();
   const absoluteUrlPattern = /\b[a-z][a-z0-9+.-]*:\/\/[^\s"'`<>]+/gi;
 
+  function explicitPort(authorityInput: string): string | undefined {
+    const authority = authorityInput.slice(authorityInput.lastIndexOf('@') + 1);
+    if (authority.startsWith('[')) {
+      const closingBracket = authority.indexOf(']');
+      if (closingBracket < 0 || authority[closingBracket + 1] !== ':') return undefined;
+      const port = authority.slice(closingBracket + 2);
+      return /^\d+$/.test(port) ? port : undefined;
+    }
+    const separator = authority.lastIndexOf(':');
+    if (separator < 0) return undefined;
+    const port = authority.slice(separator + 1);
+    return /^\d+$/.test(port) ? port : undefined;
+  }
+
+  function urlIdentity(candidate: string): {
+    destination: string;
+    protocol: string;
+  } | undefined {
+    try {
+      const authority = candidate.slice(candidate.indexOf('://') + 3).split(/[/?#]/, 1)[0] ?? '';
+      if (!authority || authority.includes('__DYNAMIC_VALUE__')) return undefined;
+      const url = new URL(candidate);
+      const protocol = url.protocol.slice(0, -1).toLowerCase();
+      if (!url.hostname || !protocol) return undefined;
+      let host = url.hostname.toLowerCase().replace(/\.$/, '');
+      if (host.includes(':') && !host.startsWith('[')) host = `[${host}]`;
+      const port = explicitPort(authority);
+      return {
+        destination: `${host}${port ? `:${port}` : ''}`,
+        protocol,
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
+  function exactMatchRange(
+    containerStart: number,
+    containerEnd: number,
+    candidate: string,
+    approximateIndex = 0,
+  ): SourceRange {
+    const raw = file.source.slice(containerStart, containerEnd);
+    let localStart = raw.indexOf(candidate, Math.max(0, approximateIndex));
+    if (localStart < 0) localStart = raw.indexOf(candidate);
+    return localStart >= 0
+      ? sourceRangeAt(
+          file.source,
+          containerStart + localStart,
+          containerStart + localStart + candidate.length,
+        )
+      : sourceRangeAt(file.source, containerStart, containerEnd);
+  }
+
   function addExternalUrls(value: string, node: LocatedNode, xmlPayload: boolean): void {
     for (const match of value.matchAll(absoluteUrlPattern)) {
       const candidate = match[0];
-      try {
-        const authority = candidate.slice(candidate.indexOf('://') + 3).split(/[/?#]/, 1)[0] ?? '';
-        if (authority.includes('__DYNAMIC_VALUE__')) continue;
-        const url = new URL(candidate);
-        const protocol = url.protocol.slice(0, -1).toLowerCase();
-        if (!url.hostname || !protocol) continue;
-        const domain = url.hostname.toLowerCase().replace(/\.$/, '');
-        const key = `${node.start}:${domain}:${protocol}`;
-        if (externalUrlKeys.has(key)) continue;
-        externalUrlKeys.add(key);
-        externalUrls.push({
-          domain,
-          protocol,
-          xmlPayload,
-          range: sourceRange(node),
-          node,
-        });
-      } catch {
-        // A URL-looking string without a parseable host is not a static domain.
-      }
+      const identity = urlIdentity(candidate);
+      if (!identity) continue;
+      const authoredToken = candidate.includes('__DYNAMIC_VALUE__')
+        ? candidate.slice(0, candidate.indexOf('__DYNAMIC_VALUE__'))
+        : candidate;
+      const range = exactMatchRange(node.start, node.end, authoredToken, match.index ?? 0);
+      const key = `${range.start.line}:${range.start.column}:${range.end.line}:${range.end.column}:${identity.destination}:${identity.protocol}`;
+      if (externalUrlKeys.has(key)) continue;
+      externalUrlKeys.add(key);
+      externalUrls.push({
+        ...identity,
+        xmlPayload,
+        range,
+        node,
+      });
+    }
+  }
+
+  function addCommentedUrls(comment: ParsedComment): void {
+    for (const match of comment.value.matchAll(absoluteUrlPattern)) {
+      const candidate = match[0];
+      const identity = urlIdentity(candidate);
+      if (!identity) continue;
+      commentedUrls.push({
+        ...identity,
+        range: exactMatchRange(comment.start, comment.end, candidate, match.index ?? 0),
+      });
     }
   }
 
@@ -355,13 +434,33 @@ export function parseMacroFile(file: MacroFile): ParseResult {
         return index < quasis.length - 1 ? `${value}__DYNAMIC_VALUE__` : value;
       }).join('');
       const xmlPayload = isXmlPayloadString(combined);
-      addExternalUrls(combined, node, xmlPayload);
+      const scheme = /^\s*([a-z][a-z0-9+.-]*):\/\//i.exec(combined)?.[1]?.toLowerCase();
+      const authority = scheme
+        ? combined.slice(combined.toLowerCase().indexOf(`${scheme}://`) + scheme.length + 3)
+          .split(/[/?#]/, 1)[0] ?? ''
+        : '';
+      if (authority.includes('__DYNAMIC_VALUE__')) {
+        dynamicExternalUrls.push({
+          range: sourceRange(node),
+          node,
+          xmlPayload,
+          ...(scheme ? { protocol: scheme } : {}),
+        });
+      } else {
+        addExternalUrls(combined, node, xmlPayload);
+      }
       const leadingText = quasis[0]?.value.cooked ?? quasis[0]?.value.raw ?? '';
       if (
         (node.expressions as LocatedNode[]).length > 0
         && /^\s*[a-z][a-z0-9+.-]*:\/\/\s*$/i.test(leadingText)
+        && !authority.includes('__DYNAMIC_VALUE__')
       ) {
-        dynamicExternalUrls.push({ range: sourceRange(node), node, xmlPayload });
+        dynamicExternalUrls.push({
+          range: sourceRange(node),
+          node,
+          xmlPayload,
+          ...(scheme ? { protocol: scheme } : {}),
+        });
       }
     }
 
@@ -406,6 +505,7 @@ export function parseMacroFile(file: MacroFile): ParseResult {
 
   moduleReferences.sort((left, right) => left.node.start - right.node.start);
   commonJsOccurrences.sort((left, right) => left.node.start - right.node.start);
+  for (const comment of comments) addCommentedUrls(comment);
 
   return {
     kind: 'parsed',
@@ -416,6 +516,7 @@ export function parseMacroFile(file: MacroFile): ParseResult {
       localImports: moduleReferences.filter((reference) => reference.specifier.startsWith('.')),
       dynamicImports,
       externalUrls,
+      commentedUrls,
       dynamicExternalUrls,
       commonJsOccurrences,
       comments,
